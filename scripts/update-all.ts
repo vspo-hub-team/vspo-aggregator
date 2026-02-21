@@ -221,12 +221,12 @@ async function fetchChannelData(channelId: string) {
 /**
  * 從 Playlist 取得最新影片 ID 列表
  */
-async function fetchPlaylistItems(playlistId: string): Promise<string[]> {
+async function fetchPlaylistItems(playlistId: string, maxResults: number = 20): Promise<string[]> {
   try {
     const url = new URL(`${YOUTUBE_API_BASE}/playlistItems`)
     url.searchParams.set('part', 'contentDetails')
     url.searchParams.set('playlistId', playlistId)
-    url.searchParams.set('maxResults', '5')
+    url.searchParams.set('maxResults', maxResults.toString())
     url.searchParams.set('key', youtubeApiKey!)
 
     const res = await fetch(url.toString())
@@ -296,8 +296,8 @@ async function processMember(member: Member, idx: number, total: number, twitchT
     return
   }
 
-  // 2. 從 Playlist 取得最新影片 ID 列表
-  const videoIds = await fetchPlaylistItems(uploadsPlaylistId)
+  // 2. 從 Playlist 取得最新影片 ID 列表（增加到 20 筆，避免 Shorts 擠掉直播存檔）
+  const videoIds = await fetchPlaylistItems(uploadsPlaylistId, 20)
   if (videoIds.length === 0) {
     console.log(`  ⚠️ 沒有找到影片`)
     await supabase.from('members').update({ live_status: 'none', is_live: false }).eq('id', member.id)
@@ -314,7 +314,63 @@ async function processMember(member: Member, idx: number, total: number, twitchT
     isValidUpcoming(v.liveStreamingDetails?.scheduledStartTime)
   )
 
-  // 5. 更新資料庫
+  // 5. 將所有成員影片存入 videos 表（不套用過濾器，成員頻道所有影片都應該存入）
+  const videosToInsert = videos.map((v) => {
+    const viewCount = parseInt(v.statistics?.viewCount || '0', 10)
+    const durationSec = parseDuration(v.contentDetails?.duration || '')
+    
+    // 根據 liveBroadcastContent 判斷 video_type
+    let videoType: 'live' | 'archive' | 'video' = 'video'
+    if (v.snippet.liveBroadcastContent === 'live') {
+      videoType = 'live'
+    } else if (v.snippet.liveBroadcastContent === 'none' && v.liveStreamingDetails) {
+      // 如果曾經是直播但現在結束了，歸類為 archive
+      videoType = 'archive'
+    }
+    
+    const thumbnailUrl = v.snippet?.thumbnails?.high?.url || 
+                        v.snippet?.thumbnails?.default?.url || 
+                        `https://img.youtube.com/vi/${v.id}/hqdefault.jpg`
+    
+    let publishedAt = new Date().toISOString()
+    if (v.snippet?.publishedAt) {
+      try {
+        publishedAt = new Date(v.snippet.publishedAt).toISOString()
+      } catch {
+        // 如果解析失敗，使用當前時間
+      }
+    }
+
+    return {
+      id: v.id,
+      member_id: member.id,
+      clipper_id: null,
+      platform: 'youtube' as const,
+      title: v.snippet?.title || '無標題',
+      thumbnail_url: thumbnailUrl,
+      published_at: publishedAt,
+      view_count: viewCount,
+      video_type: videoType,
+      duration_sec: durationSec,
+      updated_at: new Date().toISOString()
+    }
+  })
+
+  // 批次寫入 videos 表（每 50 筆）
+  const BATCH_SIZE = 50
+  for (let i = 0; i < videosToInsert.length; i += BATCH_SIZE) {
+    const batch = videosToInsert.slice(i, i + BATCH_SIZE)
+    const { error: upsertError } = await supabase.from('videos').upsert(batch, {
+      onConflict: 'id'
+    })
+    
+    if (upsertError) {
+      console.warn(`  ⚠️ 批次寫入影片失敗 (第 ${Math.floor(i / BATCH_SIZE) + 1} 批):`, upsertError.message)
+    }
+  }
+  console.log(`  💾 已儲存 ${videosToInsert.length} 部成員影片到資料庫`)
+
+  // 6. 更新 members 表的直播狀態
   if (liveV) {
     console.log(`  🔴 YouTube LIVE: ${liveV.snippet.title}`)
     await supabase.from('members').update({
