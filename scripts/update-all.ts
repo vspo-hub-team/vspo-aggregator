@@ -316,7 +316,7 @@ async function processMember(member: Member, idx: number, total: number, twitchT
   )
 
   // 5. 將所有成員影片存入 videos 表（不套用過濾器，成員頻道所有影片都應該存入）
-  // 先檢查資料庫中現有的影片類型，以便正確更新從 live 轉為 archive 的影片
+  // 先檢查資料庫中現有的影片類型，以便正確更新從 live/upcoming 轉為 archive 的影片
   const { data: existingVideos } = await supabase
     .from('videos')
     .select('id, video_type')
@@ -324,9 +324,29 @@ async function processMember(member: Member, idx: number, total: number, twitchT
     .eq('member_id', member.id)
   
   const existingVideoMap = new Map<string, string>()
+  const existingVideoIds = new Set<string>()
   if (existingVideos) {
     for (const ev of existingVideos) {
       existingVideoMap.set(ev.id, ev.video_type || 'video')
+      existingVideoIds.add(ev.id)
+    }
+  }
+
+  // 檢查是否有原本是 upcoming 的影片在這次查詢中消失了
+  // 如果消失，需要強制去撈取一次該影片的詳細資訊
+  const missingUpcomingVideos: string[] = []
+  for (const [videoId, videoType] of existingVideoMap.entries()) {
+    if ((videoType === 'live' || videoType === 'upcoming') && !videoIds.includes(videoId)) {
+      missingUpcomingVideos.push(videoId)
+    }
+  }
+
+  // 如果有消失的 upcoming/live 影片，強制查詢一次
+  if (missingUpcomingVideos.length > 0) {
+    console.log(`  🔍 發現 ${missingUpcomingVideos.length} 部狀態改變的影片，強制查詢詳細資訊...`)
+    const missingVideosDetails = await fetchVideoDetails(missingUpcomingVideos)
+    if (missingVideosDetails.length > 0) {
+      videos.push(...missingVideosDetails)
     }
   }
 
@@ -361,8 +381,19 @@ async function processMember(member: Member, idx: number, total: number, twitchT
                         thumbnails?.medium?.url ||
                         `https://img.youtube.com/vi/${v.id}/hqdefault.jpg`
     
+    // 優先使用 actualStartTime（直播實際開始時間），特別是對於已結束的直播存檔
     let publishedAt = new Date().toISOString()
-    if (v.snippet?.publishedAt) {
+    if (v.snippet.liveBroadcastContent === 'none' && v.liveStreamingDetails?.actualStartTime) {
+      // 對於已結束的直播，優先使用實際開始時間
+      try {
+        publishedAt = new Date(v.liveStreamingDetails.actualStartTime).toISOString()
+      } catch {
+        // 如果解析失敗，繼續使用 publishedAt
+      }
+    }
+    
+    // 如果沒有 actualStartTime，使用 publishedAt
+    if (publishedAt === new Date().toISOString() && v.snippet?.publishedAt) {
       try {
         publishedAt = new Date(v.snippet.publishedAt).toISOString()
       } catch {
@@ -448,7 +479,7 @@ async function processMember(member: Member, idx: number, total: number, twitchT
     }).eq('id', member.id)
   }
 
-  // Twitch 檢查（如果 YouTube 沒有直播）
+  // Twitch 檢查與存檔抓取（如果 YouTube 沒有直播）
   if (!liveV && !upcomingV && member.channel_id_twitch && twitchToken) {
     const twitchStatus = await checkTwitchLive(member.channel_id_twitch, twitchToken)
     if (twitchStatus?.isLive) {
@@ -458,6 +489,84 @@ async function processMember(member: Member, idx: number, total: number, twitchT
         live_title: twitchStatus.title, live_thumbnail: twitchStatus.thumbnail,
         last_live_at: new Date().toISOString()
       }).eq('id', member.id)
+    }
+
+    // 抓取 Twitch 直播存檔
+    try {
+      console.log(`  📹 抓取 Twitch 直播存檔...`)
+      const twitchVideosUrl = new URL(`${TWITCH_API_BASE}/videos`)
+      twitchVideosUrl.searchParams.set('user_id', member.channel_id_twitch)
+      twitchVideosUrl.searchParams.set('first', '20') // 抓取最新 20 部存檔
+      twitchVideosUrl.searchParams.set('type', 'archive') // 只抓取存檔，不包含 highlights
+
+      const twitchVideosRes = await fetch(twitchVideosUrl.toString(), {
+        headers: {
+          'Client-ID': twitchClientId!,
+          'Authorization': `Bearer ${twitchToken}`
+        }
+      })
+
+      if (twitchVideosRes.ok) {
+        const twitchVideosData = await twitchVideosRes.json()
+        const twitchVideos = twitchVideosData.data || []
+
+        if (twitchVideos.length > 0) {
+          console.log(`  ✅ 找到 ${twitchVideos.length} 部 Twitch 存檔`)
+          
+          const videosToInsert = twitchVideos.map((tv: any) => {
+            // 解析時長 (格式: "2h41m54s" 或 "1h30m" 等)
+            let durationSec = 0
+            if (tv.duration) {
+              const durationMatch = tv.duration.match(/(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/)
+              if (durationMatch) {
+                const hours = parseInt(durationMatch[1] || '0', 10)
+                const minutes = parseInt(durationMatch[2] || '0', 10)
+                const seconds = parseInt(durationMatch[3] || '0', 10)
+                durationSec = hours * 3600 + minutes * 60 + seconds
+              }
+            }
+
+            // 處理縮圖 URL
+            const thumbnailUrl = tv.thumbnail_url?.replace('{width}x{height}', '1280x720') || null
+
+            return {
+              id: tv.id, // Twitch video ID (數字字串，不會與 YouTube ID 衝突)
+              member_id: member.id,
+              clipper_id: null,
+              platform: 'twitch' as const,
+              title: tv.title || '無標題',
+              thumbnail_url: thumbnailUrl,
+              published_at: tv.created_at || tv.published_at || new Date().toISOString(),
+              view_count: tv.view_count || 0,
+              video_type: 'archive' as const,
+              duration_sec: durationSec,
+              updated_at: new Date().toISOString()
+            }
+          })
+
+          // 批次寫入 videos 表
+          const BATCH_SIZE = 50
+          for (let i = 0; i < videosToInsert.length; i += BATCH_SIZE) {
+            const batch = videosToInsert.slice(i, i + BATCH_SIZE)
+            const { error: upsertError } = await supabase.from('videos').upsert(batch, {
+              onConflict: 'id'
+            })
+            
+            if (upsertError) {
+              console.warn(`  ⚠️ Twitch 存檔批次寫入失敗 (第 ${Math.floor(i / BATCH_SIZE) + 1} 批):`, upsertError.message)
+            } else {
+              for (const video of batch) {
+                console.log(`  [Member] 成功更新 Twitch 存檔: ${video.title}`)
+              }
+            }
+          }
+          console.log(`  💾 已處理 ${videosToInsert.length} 部 Twitch 存檔`)
+        }
+      } else {
+        console.warn(`  ⚠️ Twitch 存檔 API 請求失敗: ${twitchVideosRes.status}`)
+      }
+    } catch (error) {
+      console.warn(`  ⚠️ 抓取 Twitch 存檔時發生錯誤:`, error)
     }
   }
 }

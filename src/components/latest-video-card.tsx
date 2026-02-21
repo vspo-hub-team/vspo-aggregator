@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
-import { Clapperboard, ExternalLink } from 'lucide-react'
+import { Clapperboard, ExternalLink, Youtube, Twitch } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -33,12 +33,22 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
     : (member?.avatar_url || null)
   const hasDisplayInfo = clipper !== null || member !== null
 
-  const publishedTime = video.published_at
-    ? formatDistanceToNow(new Date(video.published_at), {
-        addSuffix: true,
-        locale: zhTW,
-      })
-    : '未知時間'
+  // 格式化時間：顯示精確時間 (MM/DD HH:mm)
+  const formatPublishedTime = (dateString: string | null | undefined): string => {
+    if (!dateString) return '未知時間'
+    try {
+      const date = new Date(dateString)
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      return `${month}/${day} ${hours}:${minutes}`
+    } catch {
+      return '未知時間'
+    }
+  }
+
+  const publishedTime = formatPublishedTime(video.published_at)
 
   // 判斷是否為 New（嚴格計算 24 小時內發布）
   const isNew = video.published_at
@@ -59,6 +69,18 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
       return `${(count / 10000).toFixed(1)}萬 次觀看`
     }
     return `${count.toLocaleString()} 次觀看`
+  }
+
+  // 格式化時長 (秒數轉為 HH:mm:ss 或 mm:ss)
+  const formatDuration = (seconds: number | null | undefined): string => {
+    if (!seconds || seconds === 0) return ''
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    }
+    return `${minutes}:${String(secs).padStart(2, '0')}`
   }
 
   // 根據平台決定影片連結
@@ -125,6 +147,12 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
           />
           {/* 影片類型標籤 */}
           {getTypeBadge()}
+          {/* 時長顯示（右下角） */}
+          {video.duration_sec && video.duration_sec > 0 && (
+            <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-1.5 py-0.5 rounded">
+              {formatDuration(video.duration_sec)}
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -134,10 +162,24 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
             {video.title}
           </h3>
 
-          {/* Published Time, New Label & View Count */}
+          {/* Published Time, Platform, New Label & View Count */}
           <div className="flex items-center justify-between gap-2">
-            {/* 左邊：發布時間 */}
-            <p className="text-xs text-muted-foreground">{publishedTime}</p>
+            {/* 左邊：發布時間和平台圖示 */}
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs text-muted-foreground">{publishedTime}</p>
+              {/* 平台圖示 */}
+              {video.platform === 'twitch' ? (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Twitch className="h-3 w-3 text-purple-500" />
+                  <span className="text-purple-500">Twitch</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Youtube className="h-3 w-3 text-red-500" />
+                  <span className="text-red-500">YouTube</span>
+                </div>
+              )}
+            </div>
             {/* 右邊：New 標籤和觀看次數 */}
             <div className="flex items-center gap-2">
               {/* New 標籤（24 小時內發布） */}
