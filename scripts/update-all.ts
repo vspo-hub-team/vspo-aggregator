@@ -47,6 +47,7 @@ interface Member {
   name_zh: string
   channel_id_yt: string | null
   channel_id_twitch: string | null
+  twitch_user_id: string | null
 }
 
 interface Clipper {
@@ -117,7 +118,13 @@ async function checkTwitchLive(channelId: string, token: string) {
     const data = await res.json()
     if (data.data?.length > 0) {
       const s = data.data[0]
-      return { isLive: s.type === 'live', title: s.title, thumbnail: s.thumbnail_url?.replace('{width}x{height}', '1280x720') }
+      // 處理 Twitch 縮圖 URL（可能使用 {width}x{height} 或 %{width}x%{height} 格式）
+      let thumbnail = s.thumbnail_url || null
+      if (thumbnail) {
+        thumbnail = thumbnail.replace('{width}x{height}', '1280x720')
+          .replace('%{width}x%{height}', '1280x720')
+      }
+      return { isLive: s.type === 'live', title: s.title, thumbnail }
     }
     return { isLive: false, title: null, thumbnail: null }
   } catch {
@@ -451,51 +458,70 @@ async function processMember(member: Member, idx: number, total: number, twitchT
   }
   console.log(`  💾 已處理 ${videosToInsert.length} 部成員影片 (新增: ${totalInserted}, 更新: ${totalUpdated})`)
 
-  // 6. 更新 members 表的直播狀態
+  // 6. 更新 members 表的直播狀態（整合 YouTube 和 Twitch）
+  // 優先級：YouTube live > YouTube upcoming > Twitch live > none
+  
+  let finalLiveStatus: 'live' | 'upcoming' | 'none' = 'none'
+  let finalIsLive = false
+  let finalLiveVideoId: string | null = null
+  let finalLiveTitle: string | null = null
+  let finalLiveThumbnail: string | null = null
+  let finalLiveStartTime: string | null = null
+  let finalLastLiveAt: string | null = null
+
+  // 檢查 YouTube 狀態
   if (liveV) {
     console.log(`  🔴 YouTube LIVE: ${liveV.snippet.title}`)
-    await supabase.from('members').update({
-      live_status: 'live',
-      is_live: true,
-      live_video_id: liveV.id,
-      live_title: liveV.snippet.title,
-      live_thumbnail: liveV.snippet.thumbnails.high.url,
-      last_live_at: new Date().toISOString()
-    }).eq('id', member.id)
+    finalLiveStatus = 'live'
+    finalIsLive = true
+    finalLiveVideoId = liveV.id
+    finalLiveTitle = liveV.snippet.title
+    finalLiveThumbnail = liveV.snippet.thumbnails.high.url
+    finalLastLiveAt = new Date().toISOString()
   } else if (upcomingV) {
-    console.log(`  ⏰ 待機: ${upcomingV.snippet.title}`)
-    await supabase.from('members').update({
-      live_status: 'upcoming',
-      is_live: false,
-      live_video_id: upcomingV.id,
-      live_title: upcomingV.snippet.title,
-      live_thumbnail: upcomingV.snippet.thumbnails.high.url,
-      live_start_time: upcomingV.liveStreamingDetails?.scheduledStartTime
-    }).eq('id', member.id)
+    console.log(`  ⏰ YouTube 待機: ${upcomingV.snippet.title}`)
+    finalLiveStatus = 'upcoming'
+    finalIsLive = false
+    finalLiveVideoId = upcomingV.id
+    finalLiveTitle = upcomingV.snippet.title
+    finalLiveThumbnail = upcomingV.snippet.thumbnails.high.url
+    finalLiveStartTime = upcomingV.liveStreamingDetails?.scheduledStartTime || null
   } else {
-    await supabase.from('members').update({
-      live_status: 'none',
-      is_live: false
-    }).eq('id', member.id)
+    // YouTube 沒有直播，檢查 Twitch
+    if (member.twitch_user_id && twitchToken) {
+      const twitchStatus = await checkTwitchLive(member.twitch_user_id, twitchToken)
+      if (twitchStatus?.isLive) {
+        console.log(`  🟣 [Twitch LIVE] 🎮 ${member.name_jp} 正在 Twitch 實況中！`)
+        console.log(`     標題: ${twitchStatus.title}`)
+        finalLiveStatus = 'live'
+        finalIsLive = true
+        finalLiveVideoId = null // Twitch 直播沒有 video_id
+        finalLiveTitle = twitchStatus.title
+        finalLiveThumbnail = twitchStatus.thumbnail
+        finalLastLiveAt = new Date().toISOString()
+      }
+    }
   }
 
-  // Twitch 檢查與存檔抓取（如果 YouTube 沒有直播）
-  if (!liveV && !upcomingV && member.channel_id_twitch && twitchToken) {
-    const twitchStatus = await checkTwitchLive(member.channel_id_twitch, twitchToken)
-    if (twitchStatus?.isLive) {
-      console.log(`  🟣 Twitch LIVE: ${twitchStatus.title}`)
-      await supabase.from('members').update({
-        live_status: 'live', is_live: true, live_video_id: null,
-        live_title: twitchStatus.title, live_thumbnail: twitchStatus.thumbnail,
-        last_live_at: new Date().toISOString()
-      }).eq('id', member.id)
-    }
+  // 更新資料庫
+  await supabase.from('members').update({
+    live_status: finalLiveStatus,
+    is_live: finalIsLive,
+    live_video_id: finalLiveVideoId,
+    live_title: finalLiveTitle,
+    live_thumbnail: finalLiveThumbnail,
+    live_start_time: finalLiveStartTime,
+    last_live_at: finalLastLiveAt
+  }).eq('id', member.id)
+
+  // Twitch 存檔抓取（無論是否直播都抓取）
+  if (member.twitch_user_id && twitchToken) {
 
     // 抓取 Twitch 直播存檔
     try {
       console.log(`  📹 抓取 Twitch 直播存檔...`)
       const twitchVideosUrl = new URL(`${TWITCH_API_BASE}/videos`)
-      twitchVideosUrl.searchParams.set('user_id', member.channel_id_twitch)
+      twitchVideosUrl.searchParams.set('user_id', member.twitch_user_id)
       twitchVideosUrl.searchParams.set('first', '20') // 抓取最新 20 部存檔
       twitchVideosUrl.searchParams.set('type', 'archive') // 只抓取存檔，不包含 highlights
 
@@ -526,8 +552,12 @@ async function processMember(member: Member, idx: number, total: number, twitchT
               }
             }
 
-            // 處理縮圖 URL
-            const thumbnailUrl = tv.thumbnail_url?.replace('{width}x{height}', '1280x720') || null
+            // 處理縮圖 URL（可能使用 {width}x{height} 或 %{width}x%{height} 格式）
+            let thumbnailUrl = tv.thumbnail_url || null
+            if (thumbnailUrl) {
+              thumbnailUrl = thumbnailUrl.replace('{width}x{height}', '1280x720')
+                .replace('%{width}x%{height}', '1280x720')
+            }
 
             return {
               id: tv.id, // Twitch video ID (數字字串，不會與 YouTube ID 衝突)
@@ -856,7 +886,7 @@ async function updateAll() {
   let twitchToken = null
   if (twitchClientId && twitchClientSecret) twitchToken = await getTwitchAccessToken()
 
-  const { data: members } = await supabase.from('members').select('*')
+  const { data: members } = await supabase.from('members').select('id, name_jp, name_zh, channel_id_yt, channel_id_twitch, twitch_user_id')
   
   // 處理成員
   if (members) {
