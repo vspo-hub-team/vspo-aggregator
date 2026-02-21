@@ -143,6 +143,44 @@ function isValidUpcoming(time: string | undefined): boolean {
   return t > now && t <= now + SEVEN_DAYS_MS
 }
 
+/**
+ * 安全過濾邏輯：檢查影片是否符合 VSPO 相關（三道防線）
+ * 只要符合任一條件就允許存入
+ */
+async function isVSPORelated(
+  title: string,
+  description: string | null | undefined,
+  memberNames: { name_jp: string; name_zh: string }[]
+): Promise<boolean> {
+  const titleLower = title.toLowerCase()
+  const descLower = (description || '').toLowerCase()
+  const combinedText = `${titleLower} ${descLower}`
+
+  // 防線 1: 包含官方授權碼字眼
+  if (title.includes('許諾番号') || (description && description.includes('許諾番号'))) {
+    return true
+  }
+
+  // 防線 2: 包含通用關鍵字（忽略大小寫）
+  const keywords = ['ぶいすぽ', 'ぶいすぽっ', 'vspo', 'VSPO']
+  for (const keyword of keywords) {
+    if (combinedText.includes(keyword.toLowerCase())) {
+      return true
+    }
+  }
+
+  // 防線 3: 包含資料庫中任一位成員的日文或中文名字
+  for (const member of memberNames) {
+    if (combinedText.includes(member.name_jp.toLowerCase()) || 
+        combinedText.includes(member.name_zh.toLowerCase())) {
+      return true
+    }
+  }
+
+  // 三個條件都不符合，判定為非相關影片
+  return false
+}
+
 // --- Main Fetching Logic ---
 
 async function fetchRSSItems(channelId: string): Promise<any[]> {
@@ -321,6 +359,16 @@ async function processMember(member: Member, idx: number, total: number, twitchT
 async function processClipper(clipper: Clipper, idx: number, total: number) {
   console.log(`[${idx + 1}/${total}] 🎬 ${clipper.name}...`)
   
+  // 0. 獲取所有成員名字列表（用於安全過濾）
+  const { data: allMembers } = await supabase
+    .from('members')
+    .select('name_jp, name_zh')
+  
+  const memberNames = (allMembers || []).map(m => ({
+    name_jp: m.name_jp,
+    name_zh: m.name_zh
+  }))
+  
   // 1. 清理已存在的髒資料（以 yt:video: 開頭的錯誤 ID）
   const { error: deleteError } = await supabase
     .from('videos')
@@ -430,6 +478,13 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
           const rssData = rssVideoMap.get(videoId)
           if (!rssData) continue
           
+          // 安全過濾：檢查是否符合 VSPO 相關
+          const isRelated = await isVSPORelated(rssData.title, null, memberNames)
+          if (!isRelated) {
+            console.log(`  [Skip] 非 VSPO 影片: ${rssData.title}`)
+            continue
+          }
+          
           await supabase.from('videos').upsert({
             id: videoId,
             clipper_id: clipper.id,
@@ -471,6 +526,14 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
         
         // 優先使用 API 的標題，如果沒有則使用 RSS 的標題
         const title = apiVideo.snippet?.title || rssData?.title || '無標題'
+        const description = apiVideo.snippet?.description || null
+        
+        // 安全過濾：檢查是否符合 VSPO 相關
+        const isRelated = await isVSPORelated(title, description, memberNames)
+        if (!isRelated) {
+          console.log(`  [Skip] 非 VSPO 影片: ${title}`)
+          continue
+        }
         
         // 優先使用 API 的發布時間，如果沒有則使用 RSS 的發布時間
         let publishedAt = rssData?.publishedAt || new Date().toISOString()
@@ -506,6 +569,13 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
           const rssData = rssVideoMap.get(videoId)
           if (!rssData) continue
           
+          // 安全過濾：檢查是否符合 VSPO 相關
+          const isRelated = await isVSPORelated(rssData.title, null, memberNames)
+          if (!isRelated) {
+            console.log(`  [Skip] 非 VSPO 影片: ${rssData.title}`)
+            continue
+          }
+          
           await supabase.from('videos').upsert({
             id: videoId,
             clipper_id: clipper.id,
@@ -533,6 +603,13 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
       for (const videoId of batchIds) {
         const rssData = rssVideoMap.get(videoId)
         if (!rssData) continue
+        
+        // 安全過濾：檢查是否符合 VSPO 相關
+        const isRelated = await isVSPORelated(rssData.title, null, memberNames)
+        if (!isRelated) {
+          console.log(`  [Skip] 非 VSPO 影片: ${rssData.title}`)
+          continue
+        }
         
         await supabase.from('videos').upsert({
           id: videoId,
