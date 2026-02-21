@@ -2,11 +2,13 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
+import { Clapperboard } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { StreamWithMember } from '@/types/database'
+import { useVideoClipsCount } from '@/hooks/use-videos'
 
 interface StreamCardProps {
   stream: StreamWithMember
@@ -24,6 +26,10 @@ export function StreamCard({ stream, hasClips }: StreamCardProps) {
     : '未知時間'
 
   const thumbnailUrl = `https://img.youtube.com/vi/${stream.video_id}/maxresdefault.jpg`
+
+  // 查詢該影片是否有關聯的剪輯（使用 video_id 作為查詢條件）
+  const { data: clipsCount = 0 } = useVideoClipsCount(stream.video_id, 'archive')
+  const hasClipsCount = clipsCount > 0
 
   return (
     <Card className="group overflow-hidden transition-transform hover:scale-105">
@@ -47,6 +53,24 @@ export function StreamCard({ stream, hasClips }: StreamCardProps) {
           <Badge variant="secondary" className="bg-black/80 text-white">
             {stream.platform.toUpperCase()}
           </Badge>
+        </div>
+        {/* Clips Icon - 右下角 */}
+        <div className="absolute bottom-2 right-2 z-10">
+          <div
+            className={`flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 transition-all ${
+              hasClipsCount
+                ? '!text-purple-500 drop-shadow-[0_0_5px_rgba(168,85,247,0.5)] hover:!text-purple-400 hover:drop-shadow-[0_0_8px_rgba(168,85,247,0.7)]'
+                : '!text-muted-foreground !opacity-50'
+            }`}
+            title={hasClipsCount ? `查看相關精華 (${clipsCount} 部)` : '尚無精華'}
+          >
+            <Clapperboard className={`h-4 w-4 ${hasClipsCount ? 'text-purple-500' : 'text-muted-foreground opacity-50'}`} />
+            {hasClipsCount && clipsCount > 0 && (
+              <span className="text-xs font-bold text-purple-500">
+                {clipsCount > 99 ? '99+' : clipsCount}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

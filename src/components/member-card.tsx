@@ -40,6 +40,11 @@ export function MemberCard({ member }: MemberCardProps) {
   const isUpcoming = member.is_live && member.live_title && !member.live_video_id?.includes('live')
   const statusLabel = isUpcoming ? 'COMING SOON' : 'ON AIR'
 
+  // 判斷是否為「準備中」狀態：upcoming 且時間已過預定開台時間
+  const isPreparing = member.live_status === 'upcoming' && 
+    member.live_start_time && 
+    new Date(member.live_start_time).getTime() <= Date.now()
+
   return (
     <a
       href={linkUrl}
@@ -59,6 +64,12 @@ export function MemberCard({ member }: MemberCardProps) {
           <div className="absolute top-2 right-2 px-2 py-0.5 bg-[#ff2d2d] text-white text-xs font-bold rounded animate-pulse z-10">
             LIVE
           </div>
+        )}
+
+        {/* 準備中的微弱紅點 (如果 upcoming 且時間已過) */}
+        {isPreparing && (
+          <div className="absolute top-2 right-2 w-2 h-2 bg-red-500/60 rounded-full animate-pulse z-10" 
+               title="準備中..." />
         )}
 
         {/* 頭像區域 */}

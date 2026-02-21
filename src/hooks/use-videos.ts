@@ -96,35 +96,77 @@ export function useStreamHasClips(streamId: string) {
 }
 
 // Helper hook to get the count of clips related to a video (archive)
-// 檢查該影片是否有關聯的剪輯影片（通過 streams 表）
+// 檢查該影片是否有關聯的剪輯影片（直接查詢 videos 表）
 export function useVideoClipsCount(videoId: string, videoType?: string | null) {
   return useQuery({
     queryKey: ['video-clips-count', videoId],
     queryFn: async () => {
-      // 通過 streams 表查詢（clips -> streams -> videos）
-      // 先找到對應的 stream（streams.video_id 對應 videos.id 或 videos.video_id）
+      // videoId 參數可能是 videos.id (UUID) 或 videos.video_id (YouTube Video ID)
+      // 先嘗試作為 video_id 查詢
+      let archiveVideoId = videoId
+      
+      // 如果 videoId 看起來像 UUID（包含連字符），則查詢 videos 表獲取 video_id
+      if (videoId.includes('-')) {
+        const { data: videoData } = await supabase
+          .from('videos')
+          .select('video_id')
+          .eq('id', videoId)
+          .single()
+
+        if (videoData) {
+          archiveVideoId = videoData.video_id
+        } else {
+          return 0
+        }
+      }
+
+      // 方法 1: 通過 streams 表和 clips 表查詢（舊的方式，用於向後兼容）
+      let count1 = 0
       const { data: streamData } = await supabase
         .from('streams')
         .select('id')
-        .eq('video_id', videoId)
+        .eq('video_id', archiveVideoId)
         .limit(1)
 
-      if (!streamData || streamData.length === 0) {
-        return 0
+      if (streamData && streamData.length > 0) {
+        const streamId = streamData[0].id
+        const { data: clipsData } = await supabase
+          .from('clips')
+          .select('id', { count: 'exact', head: false })
+          .eq('related_stream_id', streamId)
+        
+        count1 = clipsData?.length || 0
       }
 
-      const streamId = streamData[0].id
-      const { data: clipsData, error: clipsError } = await supabase
-        .from('clips')
-        .select('id', { count: 'exact', head: false })
-        .eq('related_stream_id', streamId)
+      // 方法 2: 直接查詢 videos 表中 video_type = 'clipper' 的影片
+      // 通過 streams 表和 clips 表來關聯
+      let count2 = 0
+      if (streamData && streamData.length > 0) {
+        const streamId = streamData[0].id
+        
+        // 查詢 clips 表中 related_stream_id = streamId 的記錄
+        const { data: clipsData2 } = await supabase
+          .from('clips')
+          .select('video_id')
+          .eq('related_stream_id', streamId)
 
-      if (clipsError) {
-        console.error('Error fetching clips count:', clipsError)
-        return 0
+        if (clipsData2 && clipsData2.length > 0) {
+          // 通過 clips.video_id 查詢 videos 表中對應的 clipper 影片
+          const clipVideoIds = clipsData2.map(c => c.video_id).filter(Boolean)
+          if (clipVideoIds.length > 0) {
+            const { count } = await supabase
+              .from('videos')
+              .select('id', { count: 'exact', head: true })
+              .eq('video_type', 'clipper')
+              .in('video_id', clipVideoIds)
+            
+            count2 = count || 0
+          }
+        }
       }
 
-      return clipsData?.length || 0
+      // 返回最大值（避免重複計算）
+      return Math.max(count1, count2)
     },
     enabled: (videoType === 'archive' || !videoType) && !!videoId, // 只對 archive 或未指定類型的影片查詢
   })

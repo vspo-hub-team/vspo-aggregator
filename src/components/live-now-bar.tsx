@@ -137,6 +137,11 @@ function LiveMemberItem({
   const isLive = member.live_status === 'live'
   const isUpcoming = member.live_status === 'upcoming'
 
+  // 判斷是否為「準備中」狀態：upcoming 且時間已過預定開台時間
+  const isPreparing = isUpcoming && 
+    member.live_start_time && 
+    new Date(member.live_start_time).getTime() <= Date.now()
+
   // 格式化開始時間 (HH:mm)
   const formatStartTime = () => {
     if (!member.live_start_time) return null
@@ -163,6 +168,12 @@ function LiveMemberItem({
       >
         {/* 圓形頭像 */}
         <div className="relative">
+          {/* 準備中的微弱紅點 (如果 upcoming 且時間已過) */}
+          {isPreparing && (
+            <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500/60 rounded-full animate-pulse z-10" 
+                 title="準備中..." />
+          )}
+          
           {/* 優先使用 member.avatar_url，如果為空或載入失敗才顯示電視機佔位符 */}
           {member.avatar_url && !imageError ? (
             <img
