@@ -316,17 +316,43 @@ async function processMember(member: Member, idx: number, total: number, twitchT
   )
 
   // 5. 將所有成員影片存入 videos 表（不套用過濾器，成員頻道所有影片都應該存入）
+  // 先檢查資料庫中現有的影片類型，以便正確更新從 live 轉為 archive 的影片
+  const { data: existingVideos } = await supabase
+    .from('videos')
+    .select('id, video_type')
+    .in('id', videoIds)
+    .eq('member_id', member.id)
+  
+  const existingVideoMap = new Map<string, string>()
+  if (existingVideos) {
+    for (const ev of existingVideos) {
+      existingVideoMap.set(ev.id, ev.video_type || 'video')
+    }
+  }
+
   const videosToInsert = videos.map((v) => {
     const viewCount = parseInt(v.statistics?.viewCount || '0', 10)
     const durationSec = parseDuration(v.contentDetails?.duration || '')
     
     // 根據 liveBroadcastContent 判斷 video_type
+    // 如果原本是 live 但現在是 none，應該更新為 archive
     let videoType: 'live' | 'archive' | 'video' = 'video'
+    const existingType = existingVideoMap.get(v.id)
+    
     if (v.snippet.liveBroadcastContent === 'live') {
       videoType = 'live'
-    } else if (v.snippet.liveBroadcastContent === 'none' && v.liveStreamingDetails) {
-      // 如果曾經是直播但現在結束了，歸類為 archive
-      videoType = 'archive'
+    } else if (v.snippet.liveBroadcastContent === 'upcoming') {
+      videoType = 'live' // 待機室也視為 live
+    } else if (v.snippet.liveBroadcastContent === 'none') {
+      if (v.liveStreamingDetails) {
+        // 如果曾經是直播但現在結束了，歸類為 archive
+        videoType = 'archive'
+      } else if (existingType === 'live') {
+        // 如果資料庫中原本是 live，現在結束了，更新為 archive
+        videoType = 'archive'
+      } else {
+        videoType = 'video'
+      }
     }
     
     const thumbnails = v.snippet?.thumbnails as any
@@ -361,6 +387,9 @@ async function processMember(member: Member, idx: number, total: number, twitchT
 
   // 批次寫入 videos 表（每 50 筆）
   const BATCH_SIZE = 50
+  let totalUpdated = 0
+  let totalInserted = 0
+  
   for (let i = 0; i < videosToInsert.length; i += BATCH_SIZE) {
     const batch = videosToInsert.slice(i, i + BATCH_SIZE)
     const { error: upsertError } = await supabase.from('videos').upsert(batch, {
@@ -369,9 +398,27 @@ async function processMember(member: Member, idx: number, total: number, twitchT
     
     if (upsertError) {
       console.warn(`  ⚠️ 批次寫入影片失敗 (第 ${Math.floor(i / BATCH_SIZE) + 1} 批):`, upsertError.message)
+    } else {
+      // 計算新增和更新的數量
+      for (const video of batch) {
+        const existing = existingVideoMap.has(video.id)
+        if (existing) {
+          totalUpdated++
+          // 如果是從 live 轉為 archive，特別標註
+          const oldType = existingVideoMap.get(video.id)
+          if (oldType === 'live' && video.video_type === 'archive') {
+            console.log(`  [Member] 成功更新存檔: ${video.title} (live → archive)`)
+          } else {
+            console.log(`  [Member] 成功更新存檔: ${video.title}`)
+          }
+        } else {
+          totalInserted++
+          console.log(`  [Member] 成功新增存檔: ${video.title}`)
+        }
+      }
     }
   }
-  console.log(`  💾 已儲存 ${videosToInsert.length} 部成員影片到資料庫`)
+  console.log(`  💾 已處理 ${videosToInsert.length} 部成員影片 (新增: ${totalInserted}, 更新: ${totalUpdated})`)
 
   // 6. 更新 members 表的直播狀態
   if (liveV) {
