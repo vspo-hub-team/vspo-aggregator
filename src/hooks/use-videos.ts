@@ -94,3 +94,38 @@ export function useStreamHasClips(streamId: string) {
     },
   })
 }
+
+// Helper hook to get the count of clips related to a video (archive)
+// 檢查該影片是否有關聯的剪輯影片（通過 streams 表）
+export function useVideoClipsCount(videoId: string, videoType?: string | null) {
+  return useQuery({
+    queryKey: ['video-clips-count', videoId],
+    queryFn: async () => {
+      // 通過 streams 表查詢（clips -> streams -> videos）
+      // 先找到對應的 stream（streams.video_id 對應 videos.id 或 videos.video_id）
+      const { data: streamData } = await supabase
+        .from('streams')
+        .select('id')
+        .eq('video_id', videoId)
+        .limit(1)
+
+      if (!streamData || streamData.length === 0) {
+        return 0
+      }
+
+      const streamId = streamData[0].id
+      const { data: clipsData, error: clipsError } = await supabase
+        .from('clips')
+        .select('id', { count: 'exact', head: false })
+        .eq('related_stream_id', streamId)
+
+      if (clipsError) {
+        console.error('Error fetching clips count:', clipsError)
+        return 0
+      }
+
+      return clipsData?.length || 0
+    },
+    enabled: (videoType === 'archive' || !videoType) && !!videoId, // 只對 archive 或未指定類型的影片查詢
+  })
+}

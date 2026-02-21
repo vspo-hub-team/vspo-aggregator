@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Video } from '@/types/database'
 import { RelatedVideoDialog } from '@/components/related-video-dialog'
+import { useVideoClipsCount } from '@/hooks/use-videos'
 
 interface LatestVideoCardProps {
   video: Video
@@ -23,6 +24,12 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
   // 優先顯示 clipper（如果是烤肉影片），否則顯示官方成員
   const clipper = video.clipper
   const member = video.members
+
+  // 查詢該影片是否有關聯的剪輯（僅對 archive 類型查詢）
+  // 使用 video_id 或 id（兩者都可能是 YouTube Video ID）
+  const videoIdForQuery = video.video_id || video.id
+  const { data: clipsCount = 0 } = useVideoClipsCount(videoIdForQuery, video.video_type)
+  const hasClips = clipsCount > 0
   
   // 決定顯示的頭像和名稱
   const displayName = clipper 
@@ -256,15 +263,26 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-primary flex-shrink-0"
+                className={`h-7 w-7 flex-shrink-0 transition-all ${
+                  hasClips
+                    ? 'text-purple-500 hover:text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.5)] hover:drop-shadow-[0_0_8px_rgba(168,85,247,0.7)]'
+                    : 'text-muted-foreground hover:text-primary opacity-50'
+                }`}
                 onClick={(e) => {
                   e.stopPropagation()
                   e.preventDefault()
                   setDialogOpen(true)
                 }}
-                title="查看相關影片"
+                title={hasClips ? `查看相關影片 (${clipsCount} 部精華)` : '查看相關影片'}
               >
-                <Clapperboard className="h-4 w-4" />
+                <div className="relative">
+                  <Clapperboard className="h-4 w-4" />
+                  {hasClips && clipsCount > 0 && (
+                    <span className="absolute -top-1 -right-1 text-[10px] font-bold text-purple-500 bg-white rounded-full px-0.5 min-w-[14px] text-center">
+                      {clipsCount > 99 ? '99+' : clipsCount}
+                    </span>
+                  )}
+                </div>
               </Button>
             )}
           </div>
