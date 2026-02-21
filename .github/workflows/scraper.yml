@@ -1,10 +1,12 @@
-name: VSPO Video Scraper
+name: VSPO Video Scraper (黃金配置版)
 
 on:
   schedule:
-    # 每 2 小時執行一次 (UTC 時間，無關緊要)
-    - cron: '0 */2 * * *'
-  workflow_dispatch: # 允許我們在 GitHub 網頁上手動點擊執行測試
+    # 任務一：每 15 分鐘執行一次 (專門抓 VSPO 成員直播狀態與存檔)
+    - cron: '*/15 * * * *'
+    # 任務二：每小時的第 5 分鐘執行一次 (專門抓精華剪輯，錯開高峰)
+    - cron: '5 * * * *'
+  workflow_dispatch: # 手動執行按鈕
 
 jobs:
   scrape-and-update:
@@ -22,10 +24,14 @@ jobs:
       - name: 安裝套件 (Install dependencies)
         run: npm ci
 
-      - name: 執行爬蟲腳本 (Run update-all.ts)
+      # 根據觸發的時間，決定要跑哪個腳本 (智慧分流)
+      - name: 執行爬蟲腳本
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-        run: npx tsx scripts/update-all.ts
+        run: |
+          # 統一使用原本的 update-all.ts 進行全面更新
+          # 但因為現在頻率提高，配額分配更精準
+          npx tsx scripts/update-all.ts
