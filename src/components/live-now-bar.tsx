@@ -1,0 +1,292 @@
+'use client'
+
+import { useState } from 'react'
+import { format } from 'date-fns'
+import { zhTW } from 'date-fns/locale'
+import { Member } from '@/types/database'
+
+interface LiveNowBarProps {
+  members: Member[]
+}
+
+interface TooltipPosition {
+  x: number
+  y: number
+}
+
+export function LiveNowBar({ members }: LiveNowBarProps) {
+  // State: 紀錄目前滑鼠移到了哪位成員
+  const [hoveredMember, setHoveredMember] = useState<Member | null>(null)
+  const [tooltipPos, setTooltipPos] = useState<TooltipPosition>({ x: 0, y: 0 })
+
+  // 過濾：只保留 live 或 upcoming 狀態的成員
+  const filteredMembers = members.filter(
+    (member) => member.live_status === 'live' || member.live_status === 'upcoming'
+  )
+
+  // 排序：
+  // 1. 第一順位：live_status === 'live' 的成員
+  // 2. 第二順位：live_status === 'upcoming' 的成員，按 live_start_time 由早到晚排序
+  const sortedMembers = [...filteredMembers].sort((a, b) => {
+    // 如果 a 是 live，b 是 upcoming，a 排在前面
+    if (a.live_status === 'live' && b.live_status === 'upcoming') {
+      return -1
+    }
+    // 如果 a 是 upcoming，b 是 live，b 排在前面
+    if (a.live_status === 'upcoming' && b.live_status === 'live') {
+      return 1
+    }
+    // 如果兩者都是 upcoming，按 live_start_time 由早到晚排序
+    if (a.live_status === 'upcoming' && b.live_status === 'upcoming') {
+      if (!a.live_start_time && !b.live_start_time) return 0
+      if (!a.live_start_time) return 1 // 沒有時間的排在後面
+      if (!b.live_start_time) return -1
+      return new Date(a.live_start_time).getTime() - new Date(b.live_start_time).getTime()
+    }
+    // 如果兩者都是 live，保持原順序
+    return 0
+  })
+
+  // 空狀態處理：如果沒有任何成員，顯示提示訊息
+  if (sortedMembers.length === 0) {
+    return (
+      <div className="relative z-50 mb-6 rounded-xl border border-gray-700/30 bg-gray-900/80 backdrop-blur-md shadow-lg">
+        <div className="flex items-center justify-center p-6">
+          <p className="text-gray-400 text-sm md:text-base">目前無直播預定</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 處理滑鼠進入事件
+  const handleMouseEnter = (member: Member, event: React.MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    // 計算 Tooltip 應該出現的位置 (頭像正下方中心)
+    // x: 頭像中心點的水平位置
+    // y: 頭像底部 + 間距
+    const x = rect.left + rect.width / 2
+    const y = rect.bottom + 8 // 8px 間距 (mt-2)
+    setTooltipPos({ x, y })
+    setHoveredMember(member)
+  }
+
+  // 處理滑鼠離開事件
+  const handleMouseLeave = () => {
+    setHoveredMember(null)
+  }
+
+  return (
+    <>
+      <div className="relative z-50 mb-6 rounded-xl border border-red-500/30 bg-gray-900/80 backdrop-blur-md shadow-lg">
+        <div className="flex items-start gap-4 overflow-x-auto p-4 scrollbar-hide pb-8">
+          {/* 左側標題 */}
+          <div className="flex-shrink-0 flex items-center gap-2 px-2 md:px-3 pt-2">
+            <span className="text-xl md:text-2xl animate-pulse">🔴</span>
+            <span className="text-base md:text-lg font-bold text-white whitespace-nowrap">
+              LIVE NOW
+            </span>
+          </div>
+
+          {/* 成員列表 */}
+          <div className="flex items-start gap-3 md:gap-4">
+            {sortedMembers.map((member) => (
+              <LiveMemberItem
+                key={member.id}
+                member={member}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 懸浮預覽視窗 (使用 Fixed Positioning) */}
+      {hoveredMember && (hoveredMember.live_thumbnail || hoveredMember.live_title) && (
+        <Tooltip
+          member={hoveredMember}
+          position={tooltipPos}
+          onMouseLeave={handleMouseLeave}
+        />
+      )}
+    </>
+  )
+}
+
+interface LiveMemberItemProps {
+  member: Member
+  onMouseEnter: (member: Member, event: React.MouseEvent<HTMLDivElement>) => void
+  onMouseLeave: () => void
+}
+
+function LiveMemberItem({
+  member,
+  onMouseEnter,
+  onMouseLeave,
+}: LiveMemberItemProps) {
+  const [imageError, setImageError] = useState(false)
+
+  // 決定點擊後的連結
+  const linkUrl = member.live_video_id
+    ? `https://www.youtube.com/watch?v=${member.live_video_id}`
+    : member.channel_id_yt
+      ? `https://www.youtube.com/channel/${member.channel_id_yt}`
+      : '#'
+
+  const color = member.color_hex || '#888888'
+  const isLive = member.live_status === 'live'
+  const isUpcoming = member.live_status === 'upcoming'
+
+  // 格式化開始時間 (HH:mm)
+  const formatStartTime = () => {
+    if (!member.live_start_time) return null
+    try {
+      return format(new Date(member.live_start_time), 'HH:mm', { locale: zhTW })
+    } catch {
+      return null
+    }
+  }
+
+  const startTime = formatStartTime()
+
+  return (
+    <div
+      className="flex-shrink-0 flex flex-col items-center gap-2 relative"
+      onMouseEnter={(e) => onMouseEnter(member, e)}
+      onMouseLeave={onMouseLeave}
+    >
+      <a
+        href={linkUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex flex-col items-center gap-2 cursor-pointer transition-transform hover:scale-110"
+      >
+        {/* 圓形頭像 */}
+        <div className="relative">
+          {/* 優先使用 member.avatar_url，如果為空或載入失敗才顯示電視機佔位符 */}
+          {member.avatar_url && !imageError ? (
+            <img
+              src={member.avatar_url}
+              alt={member.name_jp}
+              className={`w-14 h-14 md:w-16 md:h-16 object-cover rounded-full border-2 ${
+                isLive ? 'animate-pulse' : ''
+              } ${isUpcoming ? 'grayscale' : ''}`}
+              style={{
+                borderColor: isLive ? '#ff2d2d' : isUpcoming ? '#9ca3af' : '#888888',
+                boxShadow: isLive
+                  ? '0 0 15px #ff2d2d, 0 0 5px #ff2d2d'
+                  : isUpcoming
+                    ? '0 0 10px #9ca3af, 0 0 3px #9ca3af'
+                    : 'none',
+              }}
+              onError={() => {
+                setImageError(true)
+              }}
+            />
+          ) : (
+            <div
+              className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center border-2 text-xl md:text-2xl ${
+                isUpcoming ? 'grayscale' : ''
+              }`}
+              style={{
+                backgroundColor: `${color}20`,
+                borderColor: isLive ? '#ff2d2d' : isUpcoming ? '#9ca3af' : '#888888',
+                boxShadow: isLive
+                  ? '0 0 15px #ff2d2d, 0 0 5px #ff2d2d'
+                  : isUpcoming
+                    ? '0 0 10px #9ca3af, 0 0 3px #9ca3af'
+                    : 'none',
+              }}
+            >
+              📺
+            </div>
+          )}
+        </div>
+
+        {/* 名字或時間 */}
+        <div className="text-center min-w-[60px]">
+          {isUpcoming && startTime ? (
+            <p className="text-[10px] md:text-xs font-semibold text-gray-300 whitespace-nowrap">
+              {startTime}
+            </p>
+          ) : (
+            <p className="text-[10px] md:text-xs font-semibold text-white whitespace-nowrap truncate">
+              {member.name_jp}
+            </p>
+          )}
+        </div>
+      </a>
+    </div>
+  )
+}
+
+interface TooltipProps {
+  member: Member
+  position: TooltipPosition
+  onMouseLeave: () => void
+}
+
+function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
+  // 決定點擊後的連結
+  const linkUrl = member.live_video_id
+    ? `https://www.youtube.com/watch?v=${member.live_video_id}`
+    : member.channel_id_yt
+      ? `https://www.youtube.com/channel/${member.channel_id_yt}`
+      : '#'
+
+  const isLive = member.live_status === 'live'
+  const isUpcoming = member.live_status === 'upcoming'
+
+  return (
+    <a
+      href={linkUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="fixed z-[9999] w-[200px] md:w-[240px] bg-black/90 rounded-lg overflow-hidden shadow-2xl pointer-events-auto transition-opacity duration-300"
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        transform: 'translateX(-50%)', // 置中對齊
+      }}
+      onMouseLeave={onMouseLeave}
+    >
+      {/* 直播縮圖 (16:9 比例) */}
+      {member.live_thumbnail && (
+        <div className="relative w-full aspect-video overflow-hidden">
+          <img
+            src={member.live_thumbnail}
+            alt={member.live_title || 'Live thumbnail'}
+            className={`w-full h-full object-cover ${isUpcoming ? 'grayscale' : ''}`}
+          />
+        </div>
+      )}
+
+      {/* 內容區域 */}
+      <div className="p-3 space-y-2">
+        {/* 直播標題 (限制 2 行) */}
+        {member.live_title && (
+          <p className="text-sm text-white font-medium line-clamp-2 leading-snug">
+            {member.live_title}
+          </p>
+        )}
+
+        {/* 底部標籤 */}
+        <div className="flex items-center justify-center pt-1">
+          {isLive ? (
+            <span className="px-3 py-1 bg-[#ff2d2d] text-white text-xs font-bold rounded-full">
+              WATCH NOW
+            </span>
+          ) : isUpcoming ? (
+            <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
+              COMING SOON
+            </span>
+          ) : (
+            <span className="px-3 py-1 bg-[#ff2d2d] text-white text-xs font-bold rounded-full">
+              ON AIR
+            </span>
+          )}
+        </div>
+      </div>
+    </a>
+  )
+}
