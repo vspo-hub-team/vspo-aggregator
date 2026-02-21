@@ -1,0 +1,31 @@
+name: VSPO Video Scraper
+
+on:
+  schedule:
+    # 每 2 小時執行一次 (UTC 時間，無關緊要)
+    - cron: '0 */2 * * *'
+  workflow_dispatch: # 允許我們在 GitHub 網頁上手動點擊執行測試
+
+jobs:
+  scrape-and-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 下載程式碼 (Checkout)
+        uses: actions/checkout@v4
+
+      - name: 設定 Node.js 環境
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 安裝套件 (Install dependencies)
+        run: npm ci
+
+      - name: 執行爬蟲腳本 (Run update-all.ts)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: npx tsx scripts/update-all.ts
