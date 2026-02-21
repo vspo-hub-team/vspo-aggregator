@@ -4,8 +4,6 @@ import { useMembers } from '@/hooks/use-members'
 import { LiveNowBar } from '@/components/live-now-bar'
 import { LatestVideoGrid } from '@/components/latest-video-grid'
 
-export const revalidate = 60
-
 export default function Home() {
   const { data: members } = useMembers()
 

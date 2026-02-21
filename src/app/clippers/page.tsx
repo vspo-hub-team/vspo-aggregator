@@ -21,8 +21,6 @@ import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
 
-export const revalidate = 60
-
 // 擴展 Clipper 類型，包含最新影片
 interface ClipperWithLatestVideo extends Clipper {
   latestVideo?: Video | null
