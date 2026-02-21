@@ -204,7 +204,8 @@ async function fetchChannelData(channelId: string) {
     
     if (data.items?.length > 0) {
       const ch = data.items[0]
-      const avatarUrl = ch.snippet?.thumbnails?.high?.url || ch.snippet?.thumbnails?.default?.url || null
+      const thumbnails = ch.snippet?.thumbnails as any
+      const avatarUrl = thumbnails?.high?.url || thumbnails?.default?.url || null
       const subscriberCount = ch.statistics?.subscriberCount && !ch.statistics.hiddenSubscriberCount 
         ? parseInt(ch.statistics.subscriberCount, 10) 
         : null
@@ -328,8 +329,10 @@ async function processMember(member: Member, idx: number, total: number, twitchT
       videoType = 'archive'
     }
     
-    const thumbnailUrl = v.snippet?.thumbnails?.high?.url || 
-                        v.snippet?.thumbnails?.default?.url || 
+    const thumbnails = v.snippet?.thumbnails as any
+    const thumbnailUrl = thumbnails?.high?.url || 
+                        thumbnails?.default?.url || 
+                        thumbnails?.medium?.url ||
                         `https://img.youtube.com/vi/${v.id}/hqdefault.jpg`
     
     let publishedAt = new Date().toISOString()
@@ -575,8 +578,10 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
         const durationSec = parseDuration(apiVideo.contentDetails?.duration || '')
         
         // 優先使用 API 的縮圖，如果沒有則使用 RSS 的縮圖
-        const thumbnailUrl = apiVideo.snippet?.thumbnails?.high?.url || 
-                            apiVideo.snippet?.thumbnails?.default?.url || 
+        const thumbnails = apiVideo.snippet?.thumbnails as any
+        const thumbnailUrl = thumbnails?.high?.url || 
+                            thumbnails?.default?.url || 
+                            thumbnails?.medium?.url ||
                             rssData?.thumbnailUrl || 
                             `https://img.youtube.com/vi/${apiVideo.id}/hqdefault.jpg`
         
