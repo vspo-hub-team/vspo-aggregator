@@ -78,7 +78,7 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
   return (
     <>
       <div className="relative z-50 mb-6 rounded-xl border border-red-500/30 bg-gray-900/80 backdrop-blur-md shadow-lg">
-        <div className="flex items-start gap-4 overflow-x-auto p-4 scrollbar-hide pb-8">
+        <div className="flex flex-nowrap items-start gap-4 overflow-x-auto p-4 pb-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {/* 左側標題 */}
           <div className="flex-shrink-0 flex items-center gap-2 px-2 md:px-3 pt-2">
             <span className="text-xl md:text-2xl animate-pulse">🔴</span>
@@ -88,7 +88,7 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
           </div>
 
           {/* 成員列表 */}
-          <div className="flex items-start gap-3 md:gap-4">
+          <div className="flex flex-nowrap items-start gap-3 md:gap-4">
             {sortedMembers.map((member) => (
               <LiveMemberItem
                 key={member.id}
@@ -126,12 +126,57 @@ function LiveMemberItem({
 }: LiveMemberItemProps) {
   const [imageError, setImageError] = useState(false)
 
+  // Twitch Login Name Mapping（與 member-card.tsx 和 member/[id]/page.tsx 保持一致）
+  const TWITCH_LOGINS: Record<string, string> = {
+    '花芽すみれ': 'kagasumire',
+    '花芽なずな': 'nazunakaga',
+    '一ノ瀬うるは': 'ichinose_uruha',
+    '胡桃のあ': 'kurumi_noa',
+    '橘ひなの': 'hinano_tachiba7',
+    '兎咲ミミ': 'tosaki_mimi',
+    '空澄セナ': 'asumisena',
+    '英リサ': 'lisahanabusa',
+    '八雲べに': 'yakumo_beni',
+    '小森めと': 'met_komori',
+    '神成きゅぴ': 'kaminariqpi',
+    '猫汰つな': 'tsuna_nekota',
+    '紫宮るな': 'shinomiya_runa',
+    '白波らむね': 'ramune_shiranami',
+    '如月れん': 'ren_kisaragi',
+    '藍沢エマ': 'ema_aizawa',
+    '夢野あかり': 'akarindao',
+    '夜乃くろむ': 'kuromu_yano',
+    '紡木こかげ': 'kokage_tsumugi',
+    '千燈ゆうひ': 'yuuhi_sendo',
+    '銀城サイネ': 'saine_ginjo',
+    '龍巻ちせ': 'chise_tatsumaki',
+    '甘結もか': 'amayui_moka',
+    'Arya Kuroha': 'aryakuroha',
+    'Jira Jisaki': 'jirajisaki',
+    'Remia Aotsuki': 'remiaaotsuki',
+    'Riko Solari': 'rikosolari',
+    'Narin Mikure': 'narinmikure',
+  }
+
   // 決定點擊後的連結
-  const linkUrl = member.live_video_id
-    ? `https://www.youtube.com/watch?v=${member.live_video_id}`
-    : member.channel_id_yt
-      ? `https://www.youtube.com/channel/${member.channel_id_yt}`
-      : '#'
+  // 優先級：YouTube 直播影片 > Twitch 直播頻道 > YouTube 頻道首頁
+  let linkUrl = '#'
+  if (member.is_live) {
+    if (member.live_video_id) {
+      // YouTube 直播或待機室
+      linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
+    } else if (member.channel_id_twitch) {
+      // Twitch 直播（live_video_id 為 null 且 channel_id_twitch 存在）
+      const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh] || member.channel_id_twitch
+      linkUrl = `https://www.twitch.tv/${twitchLogin}`
+    } else if (member.channel_id_yt) {
+      // 備用：YouTube 頻道首頁
+      linkUrl = `https://www.youtube.com/channel/${member.channel_id_yt}`
+    }
+  } else if (member.channel_id_yt) {
+    // 非直播狀態，導向 YouTube 頻道首頁
+    linkUrl = `https://www.youtube.com/channel/${member.channel_id_yt}`
+  }
 
   const color = member.color_hex || '#888888'
   const isLive = member.live_status === 'live'
@@ -238,12 +283,57 @@ interface TooltipProps {
 }
 
 function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
+  // Twitch Login Name Mapping（與 member-card.tsx 和 member/[id]/page.tsx 保持一致）
+  const TWITCH_LOGINS: Record<string, string> = {
+    '花芽すみれ': 'kagasumire',
+    '花芽なずな': 'nazunakaga',
+    '一ノ瀬うるは': 'ichinose_uruha',
+    '胡桃のあ': 'kurumi_noa',
+    '橘ひなの': 'hinano_tachiba7',
+    '兎咲ミミ': 'tosaki_mimi',
+    '空澄セナ': 'asumisena',
+    '英リサ': 'lisahanabusa',
+    '八雲べに': 'yakumo_beni',
+    '小森めと': 'met_komori',
+    '神成きゅぴ': 'kaminariqpi',
+    '猫汰つな': 'tsuna_nekota',
+    '紫宮るな': 'shinomiya_runa',
+    '白波らむね': 'ramune_shiranami',
+    '如月れん': 'ren_kisaragi',
+    '藍沢エマ': 'ema_aizawa',
+    '夢野あかり': 'akarindao',
+    '夜乃くろむ': 'kuromu_yano',
+    '紡木こかげ': 'kokage_tsumugi',
+    '千燈ゆうひ': 'yuuhi_sendo',
+    '銀城サイネ': 'saine_ginjo',
+    '龍巻ちせ': 'chise_tatsumaki',
+    '甘結もか': 'amayui_moka',
+    'Arya Kuroha': 'aryakuroha',
+    'Jira Jisaki': 'jirajisaki',
+    'Remia Aotsuki': 'remiaaotsuki',
+    'Riko Solari': 'rikosolari',
+    'Narin Mikure': 'narinmikure',
+  }
+
   // 決定點擊後的連結
-  const linkUrl = member.live_video_id
-    ? `https://www.youtube.com/watch?v=${member.live_video_id}`
-    : member.channel_id_yt
-      ? `https://www.youtube.com/channel/${member.channel_id_yt}`
-      : '#'
+  // 優先級：YouTube 直播影片 > Twitch 直播頻道 > YouTube 頻道首頁
+  let linkUrl = '#'
+  if (member.is_live) {
+    if (member.live_video_id) {
+      // YouTube 直播或待機室
+      linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
+    } else if (member.channel_id_twitch) {
+      // Twitch 直播（live_video_id 為 null 且 channel_id_twitch 存在）
+      const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh] || member.channel_id_twitch
+      linkUrl = `https://www.twitch.tv/${twitchLogin}`
+    } else if (member.channel_id_yt) {
+      // 備用：YouTube 頻道首頁
+      linkUrl = `https://www.youtube.com/channel/${member.channel_id_yt}`
+    }
+  } else if (member.channel_id_yt) {
+    // 非直播狀態，導向 YouTube 頻道首頁
+    linkUrl = `https://www.youtube.com/channel/${member.channel_id_yt}`
+  }
 
   const isLive = member.live_status === 'live'
   const isUpcoming = member.live_status === 'upcoming'
