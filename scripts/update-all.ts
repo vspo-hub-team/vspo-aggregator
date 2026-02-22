@@ -1,11 +1,13 @@
 /**
  * update-all.ts
- * * 全能爬蟲腳本 v6 (Playlist 策略 - 低配額版)
+ * * 全能爬蟲腳本 v7 (Playlist 策略 + Fast 模式)
  * * 功能：
  * 1. [優化] 成員直播偵測改用 Playlist 策略 (channels -> playlistItems -> videos，約3點配額)
- * 2. [保留] 烤肉頻道繼續使用 RSS 輕量化策略 (省配額)
- * 3. [保留] 自動清理髒資料 & 訂閱數更新
- * 4. [修正] 顯示日文名稱
+ * 2. [新增] --fast 模式：跳過 playlistItems API，僅執行 RSS 突發雷達 + 狀態更新
+ * 3. [新增] 擷取即時觀看人數 (concurrent_viewers)
+ * 4. [保留] 烤肉頻道繼續使用 RSS 輕量化策略 (省配額)
+ * 5. [保留] 自動清理髒資料 & 訂閱數更新
+ * 6. [修正] 顯示日文名稱
  */
 
 import { config } from 'dotenv'
@@ -15,6 +17,9 @@ import RSSParser from 'rss-parser'
 
 // 載入 .env.local 檔案
 config({ path: resolve(process.cwd(), '.env.local') })
+
+// 檢查是否為 fast 模式
+const isFastMode = process.argv.includes('--fast')
 
 // 環境變數檢查
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -124,9 +129,11 @@ async function checkTwitchLive(channelId: string, token: string) {
         thumbnail = thumbnail.replace('{width}x{height}', '1280x720')
           .replace('%{width}x%{height}', '1280x720')
       }
-      return { isLive: s.type === 'live', title: s.title, thumbnail }
+      // 提取觀看人數
+      const viewerCount = s.viewer_count ? parseInt(s.viewer_count.toString(), 10) : 0
+      return { isLive: s.type === 'live', title: s.title, thumbnail, viewerCount }
     }
-    return { isLive: false, title: null, thumbnail: null }
+    return { isLive: false, title: null, thumbnail: null, viewerCount: 0 }
   } catch {
     return null
   }
@@ -285,58 +292,99 @@ async function fetchVideoDetails(videoIds: string[]): Promise<YouTubeVideoRespon
 
 // --- Process Functions ---
 
-async function processMember(member: Member, idx: number, total: number, twitchToken: string | null) {
-  console.log(`[${idx + 1}/${total}] 👤 ${member.name_jp}...`)
+async function processMember(member: Member, idx: number, total: number, twitchToken: string | null, isFast: boolean = false) {
+  const modeLabel = isFast ? '⚡ [FAST]' : '📋 [FULL]'
+  console.log(`[${idx + 1}/${total}] ${modeLabel} 👤 ${member.name_jp}...`)
   
   if (!member.channel_id_yt) return
 
-  // 1. 取得頻道資料（包含 uploadsPlaylistId）
-  const { avatarUrl, uploadsPlaylistId } = await fetchChannelData(member.channel_id_yt)
-  
-  // 更新成員頭像
-  if (avatarUrl) {
-    await supabase.from('members').update({ avatar_url: avatarUrl }).eq('id', member.id)
-  }
+  let allVideoIds: string[] = []
+  let playlistVideoIds: string[] = []
 
-  // 如果沒有 uploadsPlaylistId，無法繼續
-  if (!uploadsPlaylistId) {
-    console.warn(`  ⚠️ 無法取得 uploadsPlaylistId`)
-    return
-  }
-
-  // 2. 從 Playlist 取得最新影片 ID 列表（增加到 20 筆，避免 Shorts 擠掉直播存檔）
-  const playlistVideoIds = await fetchPlaylistItems(uploadsPlaylistId, 20)
-  
-  // 2.5. 同時從 RSS Feed 抓取最新影片 ID（零配額且無延遲，填補 API 快取盲區）
-  let rssVideoIds: string[] = []
-  try {
-    const rssResponse = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${member.channel_id_yt}`)
-    if (rssResponse.ok) {
-      const rssText = await rssResponse.text()
-      // 使用正則表達式提取最新的 videoId，免裝套件
-      const matches = [...rssText.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>/g)]
-      rssVideoIds = matches.map(m => m[1])
-      if (rssVideoIds.length > 0) {
-        console.log(`  📡 RSS 抓取到 ${rssVideoIds.length} 部影片（包含突擊開台）`)
+  if (isFast) {
+    // Fast 模式：跳過 playlistItems API，只執行 RSS 抓取
+    console.log(`  ⚡ Fast 模式：跳過 playlistItems API，僅執行 RSS 突發雷達`)
+    
+    // 2.5. 從 RSS Feed 抓取最新影片 ID（零配額且無延遲）
+    let rssVideoIds: string[] = []
+    try {
+      const rssResponse = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${member.channel_id_yt}`)
+      if (rssResponse.ok) {
+        const rssText = await rssResponse.text()
+        const matches = [...rssText.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>/g)]
+        rssVideoIds = matches.map(m => m[1])
+        if (rssVideoIds.length > 0) {
+          console.log(`  📡 RSS 抓取到 ${rssVideoIds.length} 部影片（包含突擊開台）`)
+        }
       }
+    } catch (error) {
+      console.log(`  ⚠️ [RSS] 獲取 ${member.name_jp} 的 RSS 失敗，略過。`)
     }
-  } catch (error) {
-    console.log(`  ⚠️ [RSS] 獲取 ${member.name_jp} 的 RSS 失敗，略過。`)
+    
+    allVideoIds = rssVideoIds
+    
+    // Fast 模式：檢查資料庫中現有的 upcoming/live 影片狀態更新
+    const { data: existingLiveVideos } = await supabase
+      .from('videos')
+      .select('id')
+      .eq('member_id', member.id)
+      .in('video_type', ['live', 'upcoming'])
+    
+    if (existingLiveVideos && existingLiveVideos.length > 0) {
+      const existingLiveIds = existingLiveVideos.map(v => v.id)
+      allVideoIds = Array.from(new Set([...allVideoIds, ...existingLiveIds]))
+      console.log(`  🔍 檢查 ${existingLiveIds.length} 部現有 live/upcoming 影片狀態`)
+    }
+  } else {
+    // Full 模式：維持現有完整邏輯
+    // 1. 取得頻道資料（包含 uploadsPlaylistId）
+    const { avatarUrl, uploadsPlaylistId } = await fetchChannelData(member.channel_id_yt)
+    
+    // 更新成員頭像
+    if (avatarUrl) {
+      await supabase.from('members').update({ avatar_url: avatarUrl }).eq('id', member.id)
+    }
+
+    // 如果沒有 uploadsPlaylistId，無法繼續
+    if (!uploadsPlaylistId) {
+      console.warn(`  ⚠️ 無法取得 uploadsPlaylistId`)
+      return
+    }
+
+    // 2. 從 Playlist 取得最新影片 ID 列表（增加到 20 筆，避免 Shorts 擠掉直播存檔）
+    playlistVideoIds = await fetchPlaylistItems(uploadsPlaylistId, 20)
+    
+    // 2.5. 同時從 RSS Feed 抓取最新影片 ID（零配額且無延遲，填補 API 快取盲區）
+    let rssVideoIds: string[] = []
+    try {
+      const rssResponse = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${member.channel_id_yt}`)
+      if (rssResponse.ok) {
+        const rssText = await rssResponse.text()
+        // 使用正則表達式提取最新的 videoId，免裝套件
+        const matches = [...rssText.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>/g)]
+        rssVideoIds = matches.map(m => m[1])
+        if (rssVideoIds.length > 0) {
+          console.log(`  📡 RSS 抓取到 ${rssVideoIds.length} 部影片（包含突擊開台）`)
+        }
+      }
+    } catch (error) {
+      console.log(`  ⚠️ [RSS] 獲取 ${member.name_jp} 的 RSS 失敗，略過。`)
+    }
+    
+    // 2.6. 合併並去重 Video IDs（Playlist + RSS）
+    allVideoIds = Array.from(new Set([...playlistVideoIds, ...rssVideoIds]))
+    
+    // 如果有 RSS 額外抓到的影片，特別標註
+    const rssOnlyIds = rssVideoIds.filter(id => !playlistVideoIds.includes(id))
+    if (rssOnlyIds.length > 0) {
+      console.log(`  🎯 RSS 額外抓到 ${rssOnlyIds.length} 部突擊開台影片: ${rssOnlyIds.join(', ')}`)
+    }
   }
-  
-  // 2.6. 合併並去重 Video IDs（Playlist + RSS）
-  const allVideoIds = Array.from(new Set([...playlistVideoIds, ...rssVideoIds]))
   
   if (allVideoIds.length === 0) {
     console.log(`  ⚠️ 沒有找到影片`)
     await supabase.from('members').update({ live_status: 'none', is_live: false }).eq('id', member.id)
     return
-  }
-  
-  // 如果有 RSS 額外抓到的影片，特別標註
-  const rssOnlyIds = rssVideoIds.filter(id => !playlistVideoIds.includes(id))
-  if (rssOnlyIds.length > 0) {
-    console.log(`  🎯 RSS 額外抓到 ${rssOnlyIds.length} 部突擊開台影片: ${rssOnlyIds.join(', ')}`)
   }
 
   // 3. 取得影片詳情（使用合併後的完整 Video IDs 列表）
@@ -387,6 +435,11 @@ async function processMember(member: Member, idx: number, total: number, twitchT
   const videosToInsert = videos.map((v) => {
     const viewCount = parseInt(v.statistics?.viewCount || '0', 10)
     const durationSec = parseDuration(v.contentDetails?.duration || '')
+    
+    // 提取即時觀看人數 (concurrent_viewers)
+    const concurrentViewers = v.liveStreamingDetails?.concurrentViewers
+      ? parseInt(v.liveStreamingDetails.concurrentViewers, 10)
+      : 0
     
     // 根據 liveBroadcastContent 判斷 video_type
     // 如果原本是 live 但現在是 none，應該更新為 archive
@@ -446,6 +499,7 @@ async function processMember(member: Member, idx: number, total: number, twitchT
       view_count: viewCount,
       video_type: videoType,
       duration_sec: durationSec,
+      concurrent_viewers: concurrentViewers,
       updated_at: new Date().toISOString()
     }
   })
@@ -498,7 +552,11 @@ async function processMember(member: Member, idx: number, total: number, twitchT
 
   // 檢查 YouTube 狀態
   if (liveV) {
-    console.log(`  🔴 YouTube LIVE: ${liveV.snippet.title}`)
+    const concurrentViewersNum = liveV.liveStreamingDetails?.concurrentViewers
+      ? parseInt(liveV.liveStreamingDetails.concurrentViewers, 10)
+      : 0
+    const concurrentViewers = concurrentViewersNum.toLocaleString()
+    console.log(`  🔴 YouTube LIVE: ${liveV.snippet.title} (👁️ ${concurrentViewers} 人觀看)`)
     finalLiveStatus = 'live'
     finalIsLive = true
     finalLiveVideoId = liveV.id
@@ -518,8 +576,10 @@ async function processMember(member: Member, idx: number, total: number, twitchT
     if (member.twitch_user_id && twitchToken) {
       const twitchStatus = await checkTwitchLive(member.twitch_user_id, twitchToken)
       if (twitchStatus?.isLive) {
+        const viewerCount = twitchStatus.viewerCount ? twitchStatus.viewerCount.toLocaleString() : '0'
         console.log(`  🟣 [Twitch LIVE] 🎮 ${member.name_jp} 正在 Twitch 實況中！`)
         console.log(`     標題: ${twitchStatus.title}`)
+        console.log(`     觀看人數: 👁️ ${viewerCount} 人`)
         finalLiveStatus = 'live'
         finalIsLive = true
         finalLiveVideoId = null // Twitch 直播沒有 video_id
@@ -909,7 +969,8 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
 // --- Main ---
 
 async function updateAll() {
-  console.log('🚀 開始更新 (v6: Playlist 策略 - 低配額版)...')
+  const modeLabel = isFastMode ? '⚡ Fast 模式 (省配額)' : '📋 Full 模式 (完整同步)'
+  console.log(`🚀 開始更新 (v7: Playlist 策略 + Fast 模式) - ${modeLabel}...`)
   let twitchToken = null
   if (twitchClientId && twitchClientSecret) twitchToken = await getTwitchAccessToken()
 
@@ -919,19 +980,23 @@ async function updateAll() {
   if (members) {
     console.log('\n=== 成員狀態更新 ===')
     for (let i = 0; i < members.length; i++) {
-      await processMember(members[i], i, members.length, twitchToken)
+      await processMember(members[i], i, members.length, twitchToken, isFastMode)
       if (i < members.length - 1) await new Promise(r => setTimeout(r, 200))
     }
   }
 
-  // 處理烤肉
-  const { data: clippers } = await supabase.from('clippers').select('*')
-  if (clippers) {
-    console.log('\n=== 烤肉頻道更新 ===')
-    for (let i = 0; i < clippers.length; i++) {
-      await processClipper(clippers[i] as Clipper, i, clippers.length)
-      if (i < clippers.length - 1) await new Promise(r => setTimeout(r, 100))
+  // 處理烤肉（Fast 模式下跳過，節省配額）
+  if (!isFastMode) {
+    const { data: clippers } = await supabase.from('clippers').select('*')
+    if (clippers) {
+      console.log('\n=== 烤肉頻道更新 ===')
+      for (let i = 0; i < clippers.length; i++) {
+        await processClipper(clippers[i] as Clipper, i, clippers.length)
+        if (i < clippers.length - 1) await new Promise(r => setTimeout(r, 100))
+      }
     }
+  } else {
+    console.log('\n⚡ Fast 模式：跳過烤肉頻道更新（節省配額）')
   }
   console.log('\n✨ 全部完成！')
 }

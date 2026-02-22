@@ -90,6 +90,15 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
     return `${minutes}:${String(secs).padStart(2, '0')}`
   }
 
+  // 格式化即時觀看人數（千分位或萬的單位轉換）
+  const formatConcurrentViewers = (viewers: number | null | undefined): string => {
+    if (viewers === null || viewers === undefined || viewers === 0) return ''
+    if (viewers >= 10000) {
+      return `${(viewers / 10000).toFixed(1)}萬`
+    }
+    return viewers.toLocaleString()
+  }
+
   // 根據平台決定影片連結
   const videoId = video.video_id || video.id
   const getVideoUrl = () => {
@@ -154,8 +163,15 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
           />
           {/* 影片類型標籤 */}
           {getTypeBadge()}
-          {/* 時長顯示（右下角） */}
-          {video.duration_sec && video.duration_sec > 0 && (
+          {/* 即時觀看人數（直播中且有人觀看時顯示，左上角或右上角） */}
+          {video.video_type === 'live' && video.concurrent_viewers && video.concurrent_viewers > 0 && (
+            <div className="absolute top-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+              <span className="text-red-500">🔥</span>
+              <span className="font-semibold">{formatConcurrentViewers(video.concurrent_viewers)}</span>
+            </div>
+          )}
+          {/* 時長顯示（右下角，非直播時顯示） */}
+          {video.duration_sec && video.duration_sec > 0 && video.video_type !== 'live' && (
             <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-1.5 py-0.5 rounded">
               {formatDuration(video.duration_sec)}
             </div>

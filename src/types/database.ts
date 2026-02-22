@@ -72,6 +72,7 @@ export interface Video {
   thumbnail_url: string | null
   published_at: string | null // ISO timestamp
   view_count: number | null
+  concurrent_viewers: number | null // 即時觀看人數（直播中）
   video_type: 'live' | 'upcoming' | 'archive' | 'video' | 'short' | null
   duration_sec: number | null
   created_at: string | null // ISO timestamp
