@@ -343,7 +343,7 @@ async function processMember(member: Member, idx: number, total: number, twitchT
 
   if (isFast) {
     // Fast 模式：跳過 playlistItems API，只執行 RSS 抓取
-    if (hasYouTube) {
+    if (hasYouTube && member.channel_id_yt) {
       console.log(`  ⚡ Fast 模式：跳過 playlistItems API，僅執行 RSS 突發雷達`)
       
       // 2.5. 從 RSS Feed 抓取最新影片 ID（零配額且無延遲）
@@ -381,7 +381,7 @@ async function processMember(member: Member, idx: number, total: number, twitchT
     }
   } else {
     // Full 模式：維持現有完整邏輯
-    if (hasYouTube) {
+    if (hasYouTube && member.channel_id_yt) {
       // 1. 取得頻道資料（包含 uploadsPlaylistId）
       const { avatarUrl, uploadsPlaylistId } = await fetchChannelData(member.channel_id_yt)
       
@@ -628,9 +628,9 @@ async function processMember(member: Member, idx: number, total: number, twitchT
     finalLiveStartTime = upcomingV.liveStreamingDetails?.scheduledStartTime || null
   } else {
     // YouTube 沒有直播，檢查 Twitch
-    if (hasTwitch && twitchToken) {
+    if (hasTwitch && member.twitch_user_id && twitchToken) {
       console.log(`  [Twitch] 正在查詢 ${member.name_jp} 的直播狀態 (user_id: ${member.twitch_user_id})...`)
-      const twitchStatus = await checkTwitchLive(member.twitch_user_id!, twitchToken, member.name_jp)
+      const twitchStatus = await checkTwitchLive(member.twitch_user_id, twitchToken, member.name_jp)
       if (twitchStatus?.isLive) {
         const viewerCount = twitchStatus.viewerCount ? twitchStatus.viewerCount.toLocaleString() : '0'
         console.log(`  🟣 [Twitch LIVE] 🎮 ${member.name_jp} 正在 Twitch 實況中！`)
