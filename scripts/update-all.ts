@@ -94,32 +94,58 @@ interface YouTubeVideoResponse {
 // --- Helper Functions ---
 
 async function getTwitchAccessToken(): Promise<string | null> {
-  if (!twitchClientId || !twitchClientSecret) return null
+  console.log('[Twitch] 正在獲取 Access Token...')
+  
+  if (!twitchClientId || !twitchClientSecret) {
+    console.log('[Twitch] ❌ 失敗：缺少 TWITCH_CLIENT_ID 或 TWITCH_CLIENT_SECRET 環境變數')
+    return null
+  }
+  
   try {
-    const response = await fetch('https://id.twitch.tv/oauth2/token', {
+    const tokenUrl = `https://id.twitch.tv/oauth2/token?client_id=${twitchClientId}&client_secret=${twitchClientSecret}&grant_type=client_credentials`
+    const response = await fetch(tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: twitchClientId,
-        client_secret: twitchClientSecret,
-        grant_type: 'client_credentials',
-      }),
     })
-    if (!response.ok) return null
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log(`[Twitch] ❌ 獲取 Access Token 失敗: HTTP ${response.status} - ${errorText}`)
+      return null
+    }
+    
     const data: any = await response.json()
-    return data.access_token
-  } catch {
+    if (data.access_token) {
+      console.log('[Twitch] ✅ 成功獲取 Access Token')
+      return data.access_token
+    } else {
+      console.log(`[Twitch] ❌ 獲取 Access Token 失敗: 回應中沒有 access_token`, data)
+      return null
+    }
+  } catch (error) {
+    console.log(`[Twitch] ❌ 獲取 Access Token 時發生錯誤:`, error instanceof Error ? error.message : error)
     return null
   }
 }
 
-async function checkTwitchLive(channelId: string, token: string) {
+async function checkTwitchLive(channelId: string, token: string, memberName?: string) {
   try {
     const url = new URL(`${TWITCH_API_BASE}/streams`)
     url.searchParams.set('user_id', channelId)
+    
     const res = await fetch(url.toString(), {
-      headers: { 'Client-ID': twitchClientId!, Authorization: `Bearer ${token}` }
+      headers: { 
+        'Client-ID': twitchClientId!, 
+        'Authorization': `Bearer ${token}` 
+      }
     })
+    
+    if (!res.ok) {
+      const errorText = await res.text()
+      console.log(`  [Twitch] ⚠️ 查詢直播狀態失敗 (user_id: ${channelId}): HTTP ${res.status} - ${errorText}`)
+      return { isLive: false, title: null, thumbnail: null, viewerCount: 0 }
+    }
+    
     const data = await res.json()
     if (data.data?.length > 0) {
       const s = data.data[0]
@@ -131,11 +157,23 @@ async function checkTwitchLive(channelId: string, token: string) {
       }
       // 提取觀看人數
       const viewerCount = s.viewer_count ? parseInt(s.viewer_count.toString(), 10) : 0
-      return { isLive: s.type === 'live', title: s.title, thumbnail, viewerCount }
+      const isLive = s.type === 'live'
+      
+      if (isLive && memberName) {
+        console.log(`  [Twitch] ✅ ${memberName} 正在直播: ${s.title} (👁️ ${viewerCount.toLocaleString()} 人)`)
+      }
+      
+      return { isLive, title: s.title, thumbnail, viewerCount }
     }
+    
+    if (memberName) {
+      console.log(`  [Twitch] ⚪ ${memberName} 目前沒有直播`)
+    }
+    
     return { isLive: false, title: null, thumbnail: null, viewerCount: 0 }
-  } catch {
-    return null
+  } catch (error) {
+    console.log(`  [Twitch] ❌ 查詢直播狀態時發生錯誤:`, error instanceof Error ? error.message : error)
+    return { isLive: false, title: null, thumbnail: null, viewerCount: 0 }
   }
 }
 
@@ -296,99 +334,113 @@ async function processMember(member: Member, idx: number, total: number, twitchT
   const modeLabel = isFast ? '⚡ [FAST]' : '📋 [FULL]'
   console.log(`[${idx + 1}/${total}] ${modeLabel} 👤 ${member.name_jp}...`)
   
-  if (!member.channel_id_yt) return
+  // 重要：即使沒有 YouTube channel，也要檢查 Twitch
+  const hasYouTube = !!member.channel_id_yt
+  const hasTwitch = !!member.twitch_user_id
 
   let allVideoIds: string[] = []
   let playlistVideoIds: string[] = []
 
   if (isFast) {
     // Fast 模式：跳過 playlistItems API，只執行 RSS 抓取
-    console.log(`  ⚡ Fast 模式：跳過 playlistItems API，僅執行 RSS 突發雷達`)
-    
-    // 2.5. 從 RSS Feed 抓取最新影片 ID（零配額且無延遲）
-    let rssVideoIds: string[] = []
-    try {
-      const rssResponse = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${member.channel_id_yt}`)
-      if (rssResponse.ok) {
-        const rssText = await rssResponse.text()
-        const matches = [...rssText.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>/g)]
-        rssVideoIds = matches.map(m => m[1])
-        if (rssVideoIds.length > 0) {
-          console.log(`  📡 RSS 抓取到 ${rssVideoIds.length} 部影片（包含突擊開台）`)
+    if (hasYouTube) {
+      console.log(`  ⚡ Fast 模式：跳過 playlistItems API，僅執行 RSS 突發雷達`)
+      
+      // 2.5. 從 RSS Feed 抓取最新影片 ID（零配額且無延遲）
+      let rssVideoIds: string[] = []
+      try {
+        const rssResponse = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${member.channel_id_yt}`)
+        if (rssResponse.ok) {
+          const rssText = await rssResponse.text()
+          const matches = [...rssText.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>/g)]
+          rssVideoIds = matches.map(m => m[1])
+          if (rssVideoIds.length > 0) {
+            console.log(`  📡 RSS 抓取到 ${rssVideoIds.length} 部影片（包含突擊開台）`)
+          }
         }
+      } catch (error) {
+        console.log(`  ⚠️ [RSS] 獲取 ${member.name_jp} 的 RSS 失敗，略過。`)
       }
-    } catch (error) {
-      console.log(`  ⚠️ [RSS] 獲取 ${member.name_jp} 的 RSS 失敗，略過。`)
-    }
-    
-    allVideoIds = rssVideoIds
-    
-    // Fast 模式：檢查資料庫中現有的 upcoming/live 影片狀態更新
-    const { data: existingLiveVideos } = await supabase
-      .from('videos')
-      .select('id')
-      .eq('member_id', member.id)
-      .in('video_type', ['live', 'upcoming'])
-    
-    if (existingLiveVideos && existingLiveVideos.length > 0) {
-      const existingLiveIds = existingLiveVideos.map(v => v.id)
-      allVideoIds = Array.from(new Set([...allVideoIds, ...existingLiveIds]))
-      console.log(`  🔍 檢查 ${existingLiveIds.length} 部現有 live/upcoming 影片狀態`)
+      
+      allVideoIds = rssVideoIds
+      
+      // Fast 模式：檢查資料庫中現有的 upcoming/live 影片狀態更新
+      const { data: existingLiveVideos } = await supabase
+        .from('videos')
+        .select('id')
+        .eq('member_id', member.id)
+        .in('video_type', ['live', 'upcoming'])
+      
+      if (existingLiveVideos && existingLiveVideos.length > 0) {
+        const existingLiveIds = existingLiveVideos.map(v => v.id)
+        allVideoIds = Array.from(new Set([...allVideoIds, ...existingLiveIds]))
+        console.log(`  🔍 檢查 ${existingLiveIds.length} 部現有 live/upcoming 影片狀態`)
+      }
+    } else {
+      console.log(`  ⚡ Fast 模式：此成員沒有 YouTube 頻道，跳過 YouTube 相關處理`)
     }
   } else {
     // Full 模式：維持現有完整邏輯
-    // 1. 取得頻道資料（包含 uploadsPlaylistId）
-    const { avatarUrl, uploadsPlaylistId } = await fetchChannelData(member.channel_id_yt)
-    
-    // 更新成員頭像
-    if (avatarUrl) {
-      await supabase.from('members').update({ avatar_url: avatarUrl }).eq('id', member.id)
-    }
+    if (hasYouTube) {
+      // 1. 取得頻道資料（包含 uploadsPlaylistId）
+      const { avatarUrl, uploadsPlaylistId } = await fetchChannelData(member.channel_id_yt)
+      
+      // 更新成員頭像
+      if (avatarUrl) {
+        await supabase.from('members').update({ avatar_url: avatarUrl }).eq('id', member.id)
+      }
 
-    // 如果沒有 uploadsPlaylistId，無法繼續
-    if (!uploadsPlaylistId) {
-      console.warn(`  ⚠️ 無法取得 uploadsPlaylistId`)
-      return
-    }
+      // 如果沒有 uploadsPlaylistId，無法繼續 YouTube 處理
+      if (!uploadsPlaylistId) {
+        console.warn(`  ⚠️ 無法取得 uploadsPlaylistId`)
+        // 但繼續處理 Twitch
+      } else {
 
-    // 2. 從 Playlist 取得最新影片 ID 列表（增加到 20 筆，避免 Shorts 擠掉直播存檔）
-    playlistVideoIds = await fetchPlaylistItems(uploadsPlaylistId, 20)
-    
-    // 2.5. 同時從 RSS Feed 抓取最新影片 ID（零配額且無延遲，填補 API 快取盲區）
-    let rssVideoIds: string[] = []
-    try {
-      const rssResponse = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${member.channel_id_yt}`)
-      if (rssResponse.ok) {
-        const rssText = await rssResponse.text()
-        // 使用正則表達式提取最新的 videoId，免裝套件
-        const matches = [...rssText.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>/g)]
-        rssVideoIds = matches.map(m => m[1])
-        if (rssVideoIds.length > 0) {
-          console.log(`  📡 RSS 抓取到 ${rssVideoIds.length} 部影片（包含突擊開台）`)
+        // 2. 從 Playlist 取得最新影片 ID 列表（增加到 20 筆，避免 Shorts 擠掉直播存檔）
+        playlistVideoIds = await fetchPlaylistItems(uploadsPlaylistId, 20)
+        
+        // 2.5. 同時從 RSS Feed 抓取最新影片 ID（零配額且無延遲，填補 API 快取盲區）
+        let rssVideoIds: string[] = []
+        try {
+          const rssResponse = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${member.channel_id_yt}`)
+          if (rssResponse.ok) {
+            const rssText = await rssResponse.text()
+            // 使用正則表達式提取最新的 videoId，免裝套件
+            const matches = [...rssText.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>/g)]
+            rssVideoIds = matches.map(m => m[1])
+            if (rssVideoIds.length > 0) {
+              console.log(`  📡 RSS 抓取到 ${rssVideoIds.length} 部影片（包含突擊開台）`)
+            }
+          }
+        } catch (error) {
+          console.log(`  ⚠️ [RSS] 獲取 ${member.name_jp} 的 RSS 失敗，略過。`)
+        }
+        
+        // 2.6. 合併並去重 Video IDs（Playlist + RSS）
+        allVideoIds = Array.from(new Set([...playlistVideoIds, ...rssVideoIds]))
+        
+        // 如果有 RSS 額外抓到的影片，特別標註
+        const rssOnlyIds = rssVideoIds.filter(id => !playlistVideoIds.includes(id))
+        if (rssOnlyIds.length > 0) {
+          console.log(`  🎯 RSS 額外抓到 ${rssOnlyIds.length} 部突擊開台影片: ${rssOnlyIds.join(', ')}`)
         }
       }
-    } catch (error) {
-      console.log(`  ⚠️ [RSS] 獲取 ${member.name_jp} 的 RSS 失敗，略過。`)
-    }
-    
-    // 2.6. 合併並去重 Video IDs（Playlist + RSS）
-    allVideoIds = Array.from(new Set([...playlistVideoIds, ...rssVideoIds]))
-    
-    // 如果有 RSS 額外抓到的影片，特別標註
-    const rssOnlyIds = rssVideoIds.filter(id => !playlistVideoIds.includes(id))
-    if (rssOnlyIds.length > 0) {
-      console.log(`  🎯 RSS 額外抓到 ${rssOnlyIds.length} 部突擊開台影片: ${rssOnlyIds.join(', ')}`)
+    } else {
+      console.log(`  📋 Full 模式：此成員沒有 YouTube 頻道，跳過 YouTube 相關處理`)
     }
   }
   
-  if (allVideoIds.length === 0) {
-    console.log(`  ⚠️ 沒有找到影片`)
+  // 處理 YouTube 影片（如果有）
+  let videos: YouTubeVideoResponse['items'] = []
+  if (allVideoIds.length > 0) {
+    // 3. 取得影片詳情（使用合併後的完整 Video IDs 列表）
+    videos = await fetchVideoDetails(allVideoIds)
+  } else if (!hasTwitch) {
+    // 如果既沒有 YouTube 也沒有 Twitch，直接返回
+    console.log(`  ⚠️ 沒有找到影片，且沒有 Twitch 頻道`)
     await supabase.from('members').update({ live_status: 'none', is_live: false }).eq('id', member.id)
     return
   }
-
-  // 3. 取得影片詳情（使用合併後的完整 Video IDs 列表）
-  const videos = await fetchVideoDetails(allVideoIds)
 
   // 4. 檢查直播狀態
   let liveV = videos.find(v => v.snippet.liveBroadcastContent === 'live')
@@ -399,36 +451,39 @@ async function processMember(member: Member, idx: number, total: number, twitchT
 
   // 5. 將所有成員影片存入 videos 表（不套用過濾器，成員頻道所有影片都應該存入）
   // 先檢查資料庫中現有的影片類型，以便正確更新從 live/upcoming 轉為 archive 的影片
-  const { data: existingVideos } = await supabase
-    .from('videos')
-    .select('id, video_type')
-    .in('id', allVideoIds)
-    .eq('member_id', member.id)
-  
   const existingVideoMap = new Map<string, string>()
   const existingVideoIds = new Set<string>()
-  if (existingVideos) {
-    for (const ev of existingVideos) {
-      existingVideoMap.set(ev.id, ev.video_type || 'video')
-      existingVideoIds.add(ev.id)
+  
+  if (allVideoIds.length > 0) {
+    const { data: existingVideos } = await supabase
+      .from('videos')
+      .select('id, video_type')
+      .in('id', allVideoIds)
+      .eq('member_id', member.id)
+    
+    if (existingVideos) {
+      for (const ev of existingVideos) {
+        existingVideoMap.set(ev.id, ev.video_type || 'video')
+        existingVideoIds.add(ev.id)
+      }
     }
-  }
 
-  // 檢查是否有原本是 upcoming 的影片在這次查詢中消失了
-  // 如果消失，需要強制去撈取一次該影片的詳細資訊
-  const missingUpcomingVideos: string[] = []
-  for (const [videoId, videoType] of existingVideoMap.entries()) {
-    if ((videoType === 'live' || videoType === 'upcoming') && !allVideoIds.includes(videoId)) {
-      missingUpcomingVideos.push(videoId)
+    // 檢查是否有原本是 upcoming 的影片在這次查詢中消失了
+    // 如果消失，需要強制去撈取一次該影片的詳細資訊
+    const missingUpcomingVideos: string[] = []
+    for (const [videoId, videoType] of existingVideoMap.entries()) {
+      if ((videoType === 'live' || videoType === 'upcoming') && !allVideoIds.includes(videoId)) {
+        missingUpcomingVideos.push(videoId)
+      }
     }
-  }
 
-  // 如果有消失的 upcoming/live 影片，強制查詢一次
-  if (missingUpcomingVideos.length > 0) {
-    console.log(`  🔍 發現 ${missingUpcomingVideos.length} 部狀態改變的影片，強制查詢詳細資訊...`)
-    const missingVideosDetails = await fetchVideoDetails(missingUpcomingVideos)
-    if (missingVideosDetails.length > 0) {
-      videos.push(...missingVideosDetails)
+    // 如果有消失的 upcoming/live 影片，強制查詢一次
+    if (missingUpcomingVideos.length > 0) {
+      console.log(`  🔍 發現 ${missingUpcomingVideos.length} 部狀態改變的影片，強制查詢詳細資訊...`)
+      const missingVideosDetails = await fetchVideoDetails(missingUpcomingVideos)
+      if (missingVideosDetails.length > 0) {
+        videos.push(...missingVideosDetails)
+      }
     }
   }
 
@@ -573,8 +628,9 @@ async function processMember(member: Member, idx: number, total: number, twitchT
     finalLiveStartTime = upcomingV.liveStreamingDetails?.scheduledStartTime || null
   } else {
     // YouTube 沒有直播，檢查 Twitch
-    if (member.twitch_user_id && twitchToken) {
-      const twitchStatus = await checkTwitchLive(member.twitch_user_id, twitchToken)
+    if (hasTwitch && twitchToken) {
+      console.log(`  [Twitch] 正在查詢 ${member.name_jp} 的直播狀態 (user_id: ${member.twitch_user_id})...`)
+      const twitchStatus = await checkTwitchLive(member.twitch_user_id!, twitchToken, member.name_jp)
       if (twitchStatus?.isLive) {
         const viewerCount = twitchStatus.viewerCount ? twitchStatus.viewerCount.toLocaleString() : '0'
         console.log(`  🟣 [Twitch LIVE] 🎮 ${member.name_jp} 正在 Twitch 實況中！`)
@@ -587,6 +643,8 @@ async function processMember(member: Member, idx: number, total: number, twitchT
         finalLiveThumbnail = twitchStatus.thumbnail
         finalLastLiveAt = new Date().toISOString()
       }
+    } else if (hasTwitch && !twitchToken) {
+      console.log(`  [Twitch] ⚠️ 無法查詢 ${member.name_jp} 的直播狀態：缺少 Access Token`)
     }
   }
 
@@ -971,17 +1029,45 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
 async function updateAll() {
   const modeLabel = isFastMode ? '⚡ Fast 模式 (省配額)' : '📋 Full 模式 (完整同步)'
   console.log(`🚀 開始更新 (v7: Playlist 策略 + Fast 模式) - ${modeLabel}...`)
+  
+  // 獲取 Twitch Access Token
   let twitchToken = null
-  if (twitchClientId && twitchClientSecret) twitchToken = await getTwitchAccessToken()
+  if (twitchClientId && twitchClientSecret) {
+    twitchToken = await getTwitchAccessToken()
+  } else {
+    console.log('[Twitch] ⚠️ 跳過 Twitch 相關處理：缺少環境變數')
+  }
 
   const { data: members } = await supabase.from('members').select('id, name_jp, name_zh, channel_id_yt, channel_id_twitch, twitch_user_id')
   
   // 處理成員
   if (members) {
-    console.log('\n=== 成員狀態更新 ===')
+    console.log(`\n=== 成員狀態更新 (共 ${members.length} 位) ===`)
+    
+    // 統計有 Twitch 的成員
+    const membersWithTwitch = members.filter(m => m.twitch_user_id)
+    if (membersWithTwitch.length > 0 && twitchToken) {
+      const twitchNames = membersWithTwitch.map(m => m.name_jp).join(', ')
+      console.log(`[Twitch] 正在查詢以下成員的直播狀態: [${twitchNames}]`)
+    } else if (membersWithTwitch.length > 0 && !twitchToken) {
+      console.log(`[Twitch] ⚠️ 有 ${membersWithTwitch.length} 位成員有 Twitch 頻道，但無法獲取 Access Token，將跳過 Twitch 檢查`)
+    }
+    
     for (let i = 0; i < members.length; i++) {
       await processMember(members[i], i, members.length, twitchToken, isFastMode)
       if (i < members.length - 1) await new Promise(r => setTimeout(r, 200))
+    }
+    
+    // 最後統計 Twitch 直播人數
+    if (twitchToken) {
+      const { data: liveMembers } = await supabase
+        .from('members')
+        .select('id, live_video_id')
+        .eq('is_live', true)
+        .is('live_video_id', null) // Twitch 直播的 live_video_id 為 null
+      
+      const twitchLiveCount = liveMembers?.length || 0
+      console.log(`\n[Twitch] 查詢結果: 發現 ${twitchLiveCount} 人正在 Twitch 直播`)
     }
   }
 
