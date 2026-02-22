@@ -1,34 +1,32 @@
-name: ⚡ Fast Mode Scraper (黃金時段即時更新)
+name: Fast Mode Update
 
 on:
   schedule:
-    # 每 10 分鐘執行一次（黃金時段即時更新）
     - cron: '*/10 * * * *'
-  workflow_dispatch: # 允許手動觸發
+  workflow_dispatch:
 
 jobs:
-  fast-update:
-    name: ⚡ Fast Mode Update
+  update:
     runs-on: ubuntu-latest
-    
+    # 🌟 必殺技：把環境變數放在整個 Job 的最上面，所有步驟都能強制作效！
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+      TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+      TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '18'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci || npm install
 
       - name: Run Fast Mode Update
         run: npm run update-all -- --fast
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
-          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
