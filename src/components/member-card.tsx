@@ -19,8 +19,17 @@ export function MemberCard({ member }: MemberCardProps) {
 
   const color = member.color_hex || '#888888'
 
-  // 決定邊框顏色：直播中用紅色(#ff2d2d)，否則用成員代表色
-  const borderColor = member.is_live ? '#ff2d2d' : color
+  // 判斷直播平台：如果 is_live 且 live_video_id 為 null 且有 channel_id_twitch，則是 Twitch
+  const isTwitchLive = member.is_live && !member.live_video_id && !!member.channel_id_twitch
+  const isYouTubeLive = member.is_live && !!member.live_video_id
+
+  // 決定邊框顏色：根據平台決定顏色，否則用成員代表色
+  const liveColor = isTwitchLive
+    ? '#9146FF' // Twitch 品牌色
+    : isYouTubeLive
+      ? '#ff2d2d' // YouTube 紅色
+      : color
+  const borderColor = member.is_live ? liveColor : color
 
   // 決定陰影顏色：直播中陰影更強烈
   const shadowStyle = member.is_live
@@ -102,9 +111,12 @@ export function MemberCard({ member }: MemberCardProps) {
           boxShadow: shadowStyle,
         }}
       >
-        {/* 直播中的紅色標籤 (絕對定位在右上角) */}
+        {/* 直播中的標籤 (絕對定位在右上角，根據平台顯示不同顏色) */}
         {member.is_live && (
-          <div className="absolute top-2 right-2 px-2 py-0.5 bg-[#ff2d2d] text-white text-xs font-bold rounded animate-pulse z-10">
+          <div
+            className="absolute top-2 right-2 px-2 py-0.5 text-white text-xs font-bold rounded animate-pulse z-10"
+            style={{ backgroundColor: liveColor }}
+          >
             LIVE
           </div>
         )}
@@ -166,7 +178,7 @@ export function MemberCard({ member }: MemberCardProps) {
             )}
 
             {/* 狀態標籤 */}
-            <span className="text-[#ff2d2d] font-bold text-xs mb-2 tracking-widest">
+            <span className="font-bold text-xs mb-2 tracking-widest" style={{ color: liveColor }}>
               {statusLabel}
             </span>
 
@@ -178,7 +190,10 @@ export function MemberCard({ member }: MemberCardProps) {
             )}
 
             {/* 點擊提示 */}
-            <div className="px-3 py-1 border border-[#ff2d2d] text-[#ff2d2d] text-xs rounded-full">
+            <div
+              className="px-3 py-1 border text-xs rounded-full"
+              style={{ borderColor: liveColor, color: liveColor }}
+            >
               點擊觀看
             </div>
           </div>

@@ -75,9 +75,23 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
     setHoveredMember(null)
   }
 
+  // 判斷是否有 Twitch 直播（用於決定容器邊框顏色）
+  const hasTwitchLive = sortedMembers.some(
+    (m) => m.is_live && !m.live_video_id && m.channel_id_twitch
+  )
+  const hasYouTubeLive = sortedMembers.some(
+    (m) => m.is_live && m.live_video_id
+  )
+  // 如果同時有兩種平台，優先顯示 Twitch 的紫色；否則根據實際情況顯示
+  const containerBorderColor = hasTwitchLive
+    ? 'border-purple-500/30'
+    : hasYouTubeLive
+      ? 'border-red-500/30'
+      : 'border-red-500/30' // 預設紅色（待機室）
+
   return (
     <>
-      <div className="relative z-50 mb-6 rounded-xl border border-red-500/30 bg-gray-900/80 backdrop-blur-md shadow-lg">
+      <div className={`relative z-50 mb-6 rounded-xl border ${containerBorderColor} bg-gray-900/80 backdrop-blur-md shadow-lg`}>
         <div className="flex flex-nowrap items-start gap-4 overflow-x-auto p-4 pb-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {/* 左側標題 */}
           <div className="flex-shrink-0 flex items-center gap-2 px-2 md:px-3 pt-2">
@@ -182,6 +196,17 @@ function LiveMemberItem({
   const isLive = member.live_status === 'live'
   const isUpcoming = member.live_status === 'upcoming'
 
+  // 判斷直播平台：如果 is_live 且 live_video_id 為 null 且有 channel_id_twitch，則是 Twitch
+  const isTwitchLive = isLive && !member.live_video_id && !!member.channel_id_twitch
+  const isYouTubeLive = isLive && !!member.live_video_id
+
+  // 根據平台決定顏色
+  const liveColor = isTwitchLive
+    ? '#9146FF' // Twitch 品牌色
+    : isYouTubeLive
+      ? '#ff2d2d' // YouTube 紅色
+      : '#9ca3af' // 待機室灰色
+
   // 判斷是否為「準備中」狀態：upcoming 且時間已過預定開台時間
   const isPreparing = isUpcoming && 
     member.live_start_time && 
@@ -228,9 +253,9 @@ function LiveMemberItem({
                 isLive ? 'animate-pulse' : ''
               } ${isUpcoming ? 'grayscale' : ''}`}
               style={{
-                borderColor: isLive ? '#ff2d2d' : isUpcoming ? '#9ca3af' : '#888888',
+                borderColor: isLive ? liveColor : isUpcoming ? '#9ca3af' : '#888888',
                 boxShadow: isLive
-                  ? '0 0 15px #ff2d2d, 0 0 5px #ff2d2d'
+                  ? `0 0 15px ${liveColor}, 0 0 5px ${liveColor}`
                   : isUpcoming
                     ? '0 0 10px #9ca3af, 0 0 3px #9ca3af'
                     : 'none',
@@ -246,9 +271,9 @@ function LiveMemberItem({
               }`}
               style={{
                 backgroundColor: `${color}20`,
-                borderColor: isLive ? '#ff2d2d' : isUpcoming ? '#9ca3af' : '#888888',
+                borderColor: isLive ? liveColor : isUpcoming ? '#9ca3af' : '#888888',
                 boxShadow: isLive
-                  ? '0 0 15px #ff2d2d, 0 0 5px #ff2d2d'
+                  ? `0 0 15px ${liveColor}, 0 0 5px ${liveColor}`
                   : isUpcoming
                     ? '0 0 10px #9ca3af, 0 0 3px #9ca3af'
                     : 'none',
@@ -338,6 +363,17 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
   const isLive = member.live_status === 'live'
   const isUpcoming = member.live_status === 'upcoming'
 
+  // 判斷直播平台：如果 is_live 且 live_video_id 為 null 且有 channel_id_twitch，則是 Twitch
+  const isTwitchLive = isLive && !member.live_video_id && !!member.channel_id_twitch
+  const isYouTubeLive = isLive && !!member.live_video_id
+
+  // 根據平台決定按鈕顏色
+  const buttonColor = isTwitchLive
+    ? '#9146FF' // Twitch 品牌色
+    : isYouTubeLive
+      ? '#ff2d2d' // YouTube 紅色
+      : '#ff2d2d' // 預設紅色
+
   return (
     <a
       href={linkUrl}
@@ -374,7 +410,10 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
         {/* 底部標籤 */}
         <div className="flex items-center justify-center pt-1">
           {isLive ? (
-            <span className="px-3 py-1 bg-[#ff2d2d] text-white text-xs font-bold rounded-full">
+            <span
+              className="px-3 py-1 text-white text-xs font-bold rounded-full"
+              style={{ backgroundColor: buttonColor }}
+            >
               WATCH NOW
             </span>
           ) : isUpcoming ? (
@@ -382,7 +421,10 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
               COMING SOON
             </span>
           ) : (
-            <span className="px-3 py-1 bg-[#ff2d2d] text-white text-xs font-bold rounded-full">
+            <span
+              className="px-3 py-1 text-white text-xs font-bold rounded-full"
+              style={{ backgroundColor: buttonColor }}
+            >
               ON AIR
             </span>
           )}
