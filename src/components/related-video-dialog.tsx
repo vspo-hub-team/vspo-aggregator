@@ -1,7 +1,6 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Video } from '@/types/database'
 import {
@@ -20,121 +19,85 @@ interface RelatedVideoDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-/**
- * 計算兩個標題的相似度分數（增強版）
- */
-function calculateSimilarity(
-  titleA: string,
-  titleB: string,
-  clipperIdA: number | null,
-  clipperIdB: number | null,
-  member: { name_zh?: string | null; name_jp?: string | null } | null | undefined,
-  candidateTitle: string
-): number {
-  // 移除非文字符號，切割成 token
-  const tokenize = (title: string): string[] => {
-    return title
-      .replace(/[【】\[\]()（）#【】「」『』《》]/g, ' ') // 移除常見符號
-      .split(/\s+/)
-      .filter(token => token.length > 0)
-      .map(token => token.toLowerCase())
-  }
-
-  const tokensA = tokenize(titleA)
-  const tokensB = tokenize(titleB)
-
-  // 計算重疊關鍵字數量
-  const setA = new Set(tokensA)
-  const setB = new Set(tokensB)
-  let overlapCount = 0
-
-  for (const token of setA) {
-    if (setB.has(token)) {
-      overlapCount++
-    }
-  }
-
-  // 基礎分數：重疊關鍵字數量
-  let score = overlapCount
-
-  // 加分項 1：如果有相同的 clipper_id，額外加分
-  if (clipperIdA && clipperIdB && clipperIdA === clipperIdB) {
-    score += 3 // 同一個剪輯師額外加 3 分
-  }
-
-  // 加分項 2：成員加權（如果候選影片標題包含成員名稱）
-  if (member) {
-    const memberNameZh = member.name_zh?.toLowerCase() || ''
-    const memberNameJp = member.name_jp?.toLowerCase() || ''
-    const candidateTitleLower = candidateTitle.toLowerCase()
-
-    if (memberNameZh && candidateTitleLower.includes(memberNameZh)) {
-      score += 10 // 包含中文名稱，+10 分
-    }
-    if (memberNameJp && candidateTitleLower.includes(memberNameJp)) {
-      score += 10 // 包含日文名稱，+10 分
-    }
-  }
-
-  return score
-}
-
 export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDialogProps) {
-  // 只抓取剪輯（clipper_id 不為空）且排除直播
-  const { data: allVideos = [], isLoading } = useQuery({
-    queryKey: ['related-clips', video.id],
+  // 嚴格查詢：只抓取與當前影片（直播存檔）直接相關的精華
+  const { data: relatedVideos = [], isLoading } = useQuery({
+    queryKey: ['related-clips', video.id, video.video_id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 步驟 1: 確定當前影片的 video_id（可能是 videos.id 或 videos.video_id）
+      let archiveVideoId = video.video_id || video.id
+      
+      // 如果 video.id 看起來像 UUID（包含連字符），則查詢 videos 表獲取 video_id
+      if (video.id.includes('-') && !video.video_id) {
+        const { data: videoData } = await supabase
+          .from('videos')
+          .select('video_id')
+          .eq('id', video.id)
+          .single()
+
+        if (videoData?.video_id) {
+          archiveVideoId = videoData.video_id
+        } else {
+          // 如果找不到 video_id，返回空陣列
+          return []
+        }
+      }
+
+      // 步驟 2: 通過 streams 表找到對應的 stream_id
+      const { data: streamData, error: streamError } = await supabase
+        .from('streams')
+        .select('id')
+        .eq('video_id', archiveVideoId)
+        .limit(1)
+        .single()
+
+      if (streamError || !streamData) {
+        // 如果找不到對應的 stream，返回空陣列（可能不是存檔影片）
+        return []
+      }
+
+      const streamId = streamData.id
+
+      // 步驟 3: 通過 clips 表嚴格過濾，只獲取 related_stream_id = streamId 的精華
+      const { data: clipsData, error: clipsError } = await supabase
+        .from('clips')
+        .select('video_id')
+        .eq('related_stream_id', streamId) // 嚴格過濾：只取該場直播的精華
+        .order('published_at', { ascending: false })
+
+      if (clipsError || !clipsData || clipsData.length === 0) {
+        // 如果沒有相關精華，返回空陣列
+        return []
+      }
+
+      // 步驟 4: 通過 clips.video_id 在 videos 表中查找對應的 clipper 影片
+      const clipVideoIds = clipsData.map(c => c.video_id).filter(Boolean)
+      if (clipVideoIds.length === 0) {
+        return []
+      }
+
+      const { data: videosData, error: videosError } = await supabase
         .from('videos')
         .select('*, member:members(*), clipper:clippers(*)')
         .not('clipper_id', 'is', null) // 只抓取剪輯
+        .in('video_id', clipVideoIds) // 嚴格限制：只取這些 video_id
         .neq('video_type', 'live') // 排除直播
         .neq('video_type', 'archive') // 排除存檔（確保只抓精華）
-        .neq('id', video.id) // 排除自己
         .order('published_at', { ascending: false })
-        .limit(100) // 抓取最新的 100 部精華影片
+        .limit(20) // 限制數量，避免過多
 
-      if (error) throw error
+      if (videosError) throw videosError
 
       // 將 member 別名映射回 members 以保持向後兼容
-      const videos = (data || []).map((v: any) => ({
+      const videos = (videosData || []).map((v: any) => ({
         ...v,
         members: v.member || null,
       }))
 
       return videos as Video[]
     },
-    enabled: open, // 只在對話框打開時查詢
+    enabled: open && (video.video_type === 'archive' || video.video_type === 'live'), // 只對存檔或直播影片查詢
   })
-
-  // 前端智慧排序：計算相似度並排序
-  const relatedVideos = useMemo(() => {
-    if (!video.title || allVideos.length === 0) {
-      return []
-    }
-
-    // 計算每個影片的相似度分數
-    const videosWithScore = allVideos.map((relatedVideo) => ({
-      video: relatedVideo,
-      score: calculateSimilarity(
-        video.title || '',
-        relatedVideo.title || '',
-        video.clipper_id,
-        relatedVideo.clipper_id,
-        video.members, // 傳入當前影片的成員資訊
-        relatedVideo.title || ''
-      ),
-    }))
-
-    // 按分數降序排序
-    videosWithScore.sort((a, b) => b.score - a.score)
-
-    // 只取分數 > 0 的影片（至少有一些相似度）
-    const filtered = videosWithScore.filter(item => item.score > 0)
-
-    // 取前 10 筆
-    return filtered.slice(0, 10).map(item => item.video)
-  }, [allVideos, video.title, video.clipper_id, video.members])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
