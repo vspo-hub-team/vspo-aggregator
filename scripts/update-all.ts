@@ -305,15 +305,42 @@ async function processMember(member: Member, idx: number, total: number, twitchT
   }
 
   // 2. 從 Playlist 取得最新影片 ID 列表（增加到 20 筆，避免 Shorts 擠掉直播存檔）
-  const videoIds = await fetchPlaylistItems(uploadsPlaylistId, 20)
-  if (videoIds.length === 0) {
+  const playlistVideoIds = await fetchPlaylistItems(uploadsPlaylistId, 20)
+  
+  // 2.5. 同時從 RSS Feed 抓取最新影片 ID（零配額且無延遲，填補 API 快取盲區）
+  let rssVideoIds: string[] = []
+  try {
+    const rssResponse = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${member.channel_id_yt}`)
+    if (rssResponse.ok) {
+      const rssText = await rssResponse.text()
+      // 使用正則表達式提取最新的 videoId，免裝套件
+      const matches = [...rssText.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>/g)]
+      rssVideoIds = matches.map(m => m[1])
+      if (rssVideoIds.length > 0) {
+        console.log(`  📡 RSS 抓取到 ${rssVideoIds.length} 部影片（包含突擊開台）`)
+      }
+    }
+  } catch (error) {
+    console.log(`  ⚠️ [RSS] 獲取 ${member.name_jp} 的 RSS 失敗，略過。`)
+  }
+  
+  // 2.6. 合併並去重 Video IDs（Playlist + RSS）
+  const allVideoIds = Array.from(new Set([...playlistVideoIds, ...rssVideoIds]))
+  
+  if (allVideoIds.length === 0) {
     console.log(`  ⚠️ 沒有找到影片`)
     await supabase.from('members').update({ live_status: 'none', is_live: false }).eq('id', member.id)
     return
   }
+  
+  // 如果有 RSS 額外抓到的影片，特別標註
+  const rssOnlyIds = rssVideoIds.filter(id => !playlistVideoIds.includes(id))
+  if (rssOnlyIds.length > 0) {
+    console.log(`  🎯 RSS 額外抓到 ${rssOnlyIds.length} 部突擊開台影片: ${rssOnlyIds.join(', ')}`)
+  }
 
-  // 3. 取得影片詳情
-  const videos = await fetchVideoDetails(videoIds)
+  // 3. 取得影片詳情（使用合併後的完整 Video IDs 列表）
+  const videos = await fetchVideoDetails(allVideoIds)
 
   // 4. 檢查直播狀態
   let liveV = videos.find(v => v.snippet.liveBroadcastContent === 'live')
@@ -327,7 +354,7 @@ async function processMember(member: Member, idx: number, total: number, twitchT
   const { data: existingVideos } = await supabase
     .from('videos')
     .select('id, video_type')
-    .in('id', videoIds)
+    .in('id', allVideoIds)
     .eq('member_id', member.id)
   
   const existingVideoMap = new Map<string, string>()
@@ -343,7 +370,7 @@ async function processMember(member: Member, idx: number, total: number, twitchT
   // 如果消失，需要強制去撈取一次該影片的詳細資訊
   const missingUpcomingVideos: string[] = []
   for (const [videoId, videoType] of existingVideoMap.entries()) {
-    if ((videoType === 'live' || videoType === 'upcoming') && !videoIds.includes(videoId)) {
+    if ((videoType === 'live' || videoType === 'upcoming') && !allVideoIds.includes(videoId)) {
       missingUpcomingVideos.push(videoId)
     }
   }
