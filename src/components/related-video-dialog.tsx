@@ -20,32 +20,31 @@ interface RelatedVideoDialogProps {
 }
 
 export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDialogProps) {
-  // 極簡化查詢：只使用基礎欄位，確保一定能查詢到資料
+  // 最穩健的查詢：只使用絕對安全的欄位，所有過濾都在前端進行
   const { data: relatedVideos = [], isLoading } = useQuery({
-    queryKey: ['related-clips', video.id, video.member_id],
+    queryKey: ['related-clips', video.member_id],
     queryFn: async () => {
       let results: Video[] = []
 
-      // ===== 第一順位：同成員推薦（最簡單直接） =====
+      // ===== 第一順位：同成員推薦（絕對防呆寫法） =====
       if (video.member_id) {
         try {
-          // 只查詢基礎欄位，不進行 JOIN
-          // 注意：不排除當前影片（避免 UUID/字串型別錯誤），改為在前端過濾
+          // 只查詢基礎欄位，只使用 UUID 比對（member_id 確定是 UUID）
           const { data: videosData, error } = await supabase
             .from('videos')
             .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
-            .eq('member_id', video.member_id) // 同成員（member_id 是 UUID，確保型別正確）
+            .eq('member_id', video.member_id) // 同成員（member_id 是 UUID，絕對安全）
             .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
             .neq('video_type', 'live') // 排除直播
             .neq('video_type', 'archive') // 排除存檔
             .order('published_at', { ascending: false })
-            .limit(10) // 多取一些，以便前端過濾後仍有足夠數量
+            .limit(12) // 多取一些，以便前端過濾後仍有足夠數量
 
           if (error) {
             console.warn('第一順位查詢錯誤:', error)
           } else if (videosData && videosData.length > 0) {
-            // 前端過濾：排除當前影片（避免 UUID/字串型別錯誤）
-            const filteredVideos = videosData.filter(v => v.id !== video.id)
+            // 前端過濾：排除當前影片（所有過濾都在前端進行，避免型別錯誤）
+            const filteredVideos = videosData.filter(v => v.id !== video.id).slice(0, 6)
             
             // 如果需要關聯資料，再單獨查詢
             const memberIds = [...new Set(filteredVideos.map(v => v.member_id).filter(Boolean))]
@@ -88,8 +87,7 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
       // ===== 第二順位：全站最新精華（無腦 Fallback） =====
       if (results.length < 3) {
         try {
-          // 只查詢基礎欄位
-          // 注意：不排除當前影片（避免 UUID/字串型別錯誤），改為在前端過濾
+          // 只查詢基礎欄位，不使用任何可能導致型別錯誤的過濾
           const { data: videosData, error } = await supabase
             .from('videos')
             .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
@@ -97,14 +95,16 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
             .neq('video_type', 'live') // 排除直播
             .neq('video_type', 'archive') // 排除存檔
             .order('published_at', { ascending: false })
-            .limit(10) // 多取一些，以便前端過濾後仍有足夠數量
+            .limit(12) // 多取一些，以便前端過濾後仍有足夠數量
 
           if (error) {
             console.warn('第二順位查詢錯誤:', error)
           } else if (videosData && videosData.length > 0) {
-            // 前端過濾：排除當前影片和已存在的影片（避免 UUID/字串型別錯誤）
+            // 前端過濾：排除當前影片和已存在的影片（所有過濾都在前端進行）
             const existingIds = new Set(results.map(v => v.id))
-            const filteredVideos = videosData.filter(v => v.id !== video.id && !existingIds.has(v.id))
+            const filteredVideos = videosData
+              .filter(v => v.id !== video.id && !existingIds.has(v.id))
+              .slice(0, 6 - results.length) // 確保總數不超過 6 部
             
             // 如果需要關聯資料，再單獨查詢
             const memberIds = [...new Set(filteredVideos.map(v => v.member_id).filter(Boolean))]
