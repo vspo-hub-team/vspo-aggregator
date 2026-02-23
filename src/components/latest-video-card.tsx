@@ -157,13 +157,13 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
         {/* Thumbnail */}
         <div className="relative aspect-video w-full overflow-hidden bg-muted">
           <img
-            src={video.thumbnail_url || 'https://via.placeholder.com/640x360'}
+            src={video.thumbnail_url || 'https://placehold.co/640x400/1a1a1a/ffffff?text=No+Image'}
             alt={video.title}
             className="w-full h-full object-cover transition-transform group-hover:scale-110"
             onError={(e) => {
               // 處理圖片載入失敗（例如 Twitch 403 錯誤）
               const target = e.target as HTMLImageElement
-              target.src = 'https://via.placeholder.com/640x360/1a1a1a/ffffff?text=No+Image'
+              target.src = 'https://placehold.co/640x400/1a1a1a/ffffff?text=No+Image'
             }}
           />
           {/* 影片類型標籤 */}

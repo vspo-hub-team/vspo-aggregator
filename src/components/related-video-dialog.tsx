@@ -29,10 +29,10 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
       // ===== 第一順位：同成員推薦（最簡單直接） =====
       if (video.member_id) {
         try {
-          // 只查詢基礎欄位，不進行 JOIN
+          // 只查詢基礎欄位，不進行 JOIN（移除不存在的 video_id）
           const { data: videosData, error } = await supabase
             .from('videos')
-            .select('id, video_id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
+            .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
             .eq('member_id', video.member_id) // 同成員
             .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
             .neq('video_type', 'live') // 排除直播
@@ -85,10 +85,10 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
       // ===== 第二順位：全站最新精華（無腦 Fallback） =====
       if (results.length < 3) {
         try {
-          // 只查詢基礎欄位
+          // 只查詢基礎欄位（移除不存在的 video_id）
           const { data: videosData, error } = await supabase
             .from('videos')
-            .select('id, video_id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
+            .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
             .not('clipper_id', 'is', null) // 只取精華
             .neq('video_type', 'live') // 排除直播
             .neq('video_type', 'archive') // 排除存檔

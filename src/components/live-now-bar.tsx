@@ -410,7 +410,7 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
             onError={(e) => {
               // 處理圖片載入失敗（例如 Twitch 403 錯誤）
               const target = e.target as HTMLImageElement
-              target.src = 'https://via.placeholder.com/640x360/1a1a1a/ffffff?text=No+Image'
+              target.src = 'https://placehold.co/640x400/1a1a1a/ffffff?text=No+Image'
             }}
           />
         </div>
