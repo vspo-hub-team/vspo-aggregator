@@ -29,24 +29,27 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
       // ===== 第一順位：同成員推薦（最簡單直接） =====
       if (video.member_id) {
         try {
-          // 只查詢基礎欄位，不進行 JOIN（移除不存在的 video_id）
+          // 只查詢基礎欄位，不進行 JOIN
+          // 注意：不排除當前影片（避免 UUID/字串型別錯誤），改為在前端過濾
           const { data: videosData, error } = await supabase
             .from('videos')
             .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
-            .eq('member_id', video.member_id) // 同成員
+            .eq('member_id', video.member_id) // 同成員（member_id 是 UUID，確保型別正確）
             .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
             .neq('video_type', 'live') // 排除直播
             .neq('video_type', 'archive') // 排除存檔
-            .neq('id', video.id) // 排除當前影片
             .order('published_at', { ascending: false })
-            .limit(6)
+            .limit(10) // 多取一些，以便前端過濾後仍有足夠數量
 
           if (error) {
             console.warn('第一順位查詢錯誤:', error)
           } else if (videosData && videosData.length > 0) {
+            // 前端過濾：排除當前影片（避免 UUID/字串型別錯誤）
+            const filteredVideos = videosData.filter(v => v.id !== video.id)
+            
             // 如果需要關聯資料，再單獨查詢
-            const memberIds = [...new Set(videosData.map(v => v.member_id).filter(Boolean))]
-            const clipperIds = [...new Set(videosData.map(v => v.clipper_id).filter(Boolean))]
+            const memberIds = [...new Set(filteredVideos.map(v => v.member_id).filter(Boolean))]
+            const clipperIds = [...new Set(filteredVideos.map(v => v.clipper_id).filter(Boolean))]
 
             let membersMap = new Map()
             let clippersMap = new Map()
@@ -71,7 +74,7 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
               }
             }
 
-            results = videosData.map((v: any) => ({
+            results = filteredVideos.map((v: any) => ({
               ...v,
               members: membersMap.get(v.member_id) || null,
               clipper: clippersMap.get(v.clipper_id) || null,
@@ -85,23 +88,27 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
       // ===== 第二順位：全站最新精華（無腦 Fallback） =====
       if (results.length < 3) {
         try {
-          // 只查詢基礎欄位（移除不存在的 video_id）
+          // 只查詢基礎欄位
+          // 注意：不排除當前影片（避免 UUID/字串型別錯誤），改為在前端過濾
           const { data: videosData, error } = await supabase
             .from('videos')
             .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
             .not('clipper_id', 'is', null) // 只取精華
             .neq('video_type', 'live') // 排除直播
             .neq('video_type', 'archive') // 排除存檔
-            .neq('id', video.id) // 排除當前影片
             .order('published_at', { ascending: false })
-            .limit(6)
+            .limit(10) // 多取一些，以便前端過濾後仍有足夠數量
 
           if (error) {
             console.warn('第二順位查詢錯誤:', error)
           } else if (videosData && videosData.length > 0) {
+            // 前端過濾：排除當前影片和已存在的影片（避免 UUID/字串型別錯誤）
+            const existingIds = new Set(results.map(v => v.id))
+            const filteredVideos = videosData.filter(v => v.id !== video.id && !existingIds.has(v.id))
+            
             // 如果需要關聯資料，再單獨查詢
-            const memberIds = [...new Set(videosData.map(v => v.member_id).filter(Boolean))]
-            const clipperIds = [...new Set(videosData.map(v => v.clipper_id).filter(Boolean))]
+            const memberIds = [...new Set(filteredVideos.map(v => v.member_id).filter(Boolean))]
+            const clipperIds = [...new Set(filteredVideos.map(v => v.clipper_id).filter(Boolean))]
 
             let membersMap = new Map()
             let clippersMap = new Map()
@@ -126,16 +133,13 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
               }
             }
 
-            const newClips = videosData.map((v: any) => ({
+            const newClips = filteredVideos.map((v: any) => ({
               ...v,
               members: membersMap.get(v.member_id) || null,
               clipper: clippersMap.get(v.clipper_id) || null,
             })) as Video[]
 
-            // 合併結果，避免重複
-            const existingIds = new Set(results.map(v => v.id))
-            const uniqueClips = newClips.filter(v => !existingIds.has(v.id))
-            results = [...results, ...uniqueClips]
+            results = [...results, ...newClips]
           }
         } catch (error) {
           console.warn('第二順位查詢失敗:', error)
