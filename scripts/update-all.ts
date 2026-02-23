@@ -128,6 +128,40 @@ async function getTwitchAccessToken(): Promise<string | null> {
   }
 }
 
+/**
+ * 根據 login name 獲取 Twitch User ID
+ */
+async function getTwitchUserId(login: string, token: string): Promise<string | null> {
+  try {
+    const url = new URL(`${TWITCH_API_BASE}/users`)
+    url.searchParams.set('login', login)
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'Client-ID': twitchClientId!,
+        'Authorization': `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log(`  [Twitch] ⚠️ 查詢 User ID 失敗 (${login}): HTTP ${response.status} - ${errorText}`)
+      return null
+    }
+
+    const data: any = await response.json()
+    if (data.data && data.data.length > 0) {
+      return data.data[0].id // Twitch user_id (數字字串)
+    }
+
+    console.log(`  [Twitch] ⚠️ 找不到 Twitch 帳號: ${login}`)
+    return null
+  } catch (error) {
+    console.log(`  [Twitch] ❌ 查詢 User ID 時發生錯誤 (${login}):`, error instanceof Error ? error.message : error)
+    return null
+  }
+}
+
 async function checkTwitchLive(channelId: string, token: string, memberName?: string) {
   try {
     const url = new URL(`${TWITCH_API_BASE}/streams`)
@@ -335,8 +369,9 @@ async function processMember(member: Member, idx: number, total: number, twitchT
   console.log(`[${idx + 1}/${total}] ${modeLabel} 👤 ${member.name_jp}...`)
   
   // 重要：即使沒有 YouTube channel，也要檢查 Twitch
+  // 注意：hasTwitch 改為檢查 channel_id_twitch，因為 twitch_user_id 可能會在執行過程中自動補齊
   const hasYouTube = !!member.channel_id_yt
-  const hasTwitch = !!member.twitch_user_id
+  const hasTwitch = !!member.channel_id_twitch
 
   let allVideoIds: string[] = []
   let playlistVideoIds: string[] = []
@@ -628,9 +663,35 @@ async function processMember(member: Member, idx: number, total: number, twitchT
     finalLiveStartTime = upcomingV.liveStreamingDetails?.scheduledStartTime || null
   } else {
     // YouTube 沒有直播，檢查 Twitch
-    if (hasTwitch && member.twitch_user_id && twitchToken) {
-      console.log(`  [Twitch] 正在查詢 ${member.name_jp} 的直播狀態 (user_id: ${member.twitch_user_id})...`)
-      const twitchStatus = await checkTwitchLive(member.twitch_user_id, twitchToken, member.name_jp)
+    // 自動獲取 Twitch User ID（如果 channel_id_twitch 有值但 twitch_user_id 為空）
+    let finalTwitchUserId = member.twitch_user_id
+    if (member.channel_id_twitch && !member.twitch_user_id && twitchToken) {
+      console.log(`  [Twitch] 🔍 自動補齊 User ID: ${member.channel_id_twitch}...`)
+      const newId = await getTwitchUserId(member.channel_id_twitch, twitchToken)
+      if (newId) {
+        // 更新資料庫
+        const { error: updateError } = await supabase
+          .from('members')
+          .update({ twitch_user_id: newId })
+          .eq('id', member.id)
+        
+        if (updateError) {
+          console.log(`  [Twitch] ❌ 更新 User ID 失敗: ${updateError.message}`)
+        } else {
+          console.log(`  [Twitch] ✅ 自動補齊 ID: ${member.channel_id_twitch} -> ${newId}`)
+          // 更新當前 member 物件和變數，讓程式可以繼續往下執行
+          finalTwitchUserId = newId
+          member.twitch_user_id = newId
+        }
+      } else {
+        console.log(`  [Twitch] ⚠️ 無法獲取 ${member.channel_id_twitch} 的 User ID，跳過 Twitch 檢查`)
+      }
+    }
+    
+    // 檢查 Twitch 直播狀態
+    if (hasTwitch && finalTwitchUserId && twitchToken) {
+      console.log(`  [Twitch] 正在查詢 ${member.name_jp} 的直播狀態 (user_id: ${finalTwitchUserId})...`)
+      const twitchStatus = await checkTwitchLive(finalTwitchUserId, twitchToken, member.name_jp)
       if (twitchStatus?.isLive) {
         const viewerCount = twitchStatus.viewerCount ? twitchStatus.viewerCount.toLocaleString() : '0'
         console.log(`  🟣 [Twitch LIVE] 🎮 ${member.name_jp} 正在 Twitch 實況中！`)
@@ -660,6 +721,8 @@ async function processMember(member: Member, idx: number, total: number, twitchT
   }).eq('id', member.id)
 
   // Twitch 存檔抓取（無論是否直播都抓取）
+  // 使用更新後的 twitch_user_id（如果剛才自動補齊了）
+  // 注意：這裡使用 member.twitch_user_id，因為在檢查直播狀態時已經更新了
   if (member.twitch_user_id && twitchToken) {
 
     // 抓取 Twitch 直播存檔
