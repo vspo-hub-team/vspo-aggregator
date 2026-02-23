@@ -76,11 +76,12 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
   }
 
   // 判斷是否有 Twitch 直播（用於決定容器邊框顏色）
+  // YouTube 影片 ID 特徵：11 個字元；Twitch stream ID：純數字字串，長度不等於 11
   const hasTwitchLive = sortedMembers.some(
-    (m) => m.is_live && !m.live_video_id && m.channel_id_twitch
+    (m) => m.is_live && !!m.channel_id_twitch && (!m.live_video_id || m.live_video_id.length !== 11)
   )
   const hasYouTubeLive = sortedMembers.some(
-    (m) => m.is_live && m.live_video_id
+    (m) => m.is_live && !!m.live_video_id && m.live_video_id.length === 11
   )
   // 如果同時有兩種平台，優先顯示 Twitch 的紫色；否則根據實際情況顯示
   const containerBorderColor = hasTwitchLive
@@ -172,15 +173,26 @@ function LiveMemberItem({
     'Narin Mikure': 'narinmikure',
   }
 
+  const color = member.color_hex || '#888888'
+  const isLive = member.live_status === 'live'
+  const isUpcoming = member.live_status === 'upcoming'
+
+  // 判斷直播平台：
+  // YouTube 影片 ID 特徵：11 個字元
+  // Twitch stream ID 特徵：純數字字串，長度不等於 11
+  // 優先判斷：如果有 channel_id_twitch 且 live_video_id 不是 11 字元，則是 Twitch
+  const isYouTubeLive = isLive && !!member.live_video_id && member.live_video_id.length === 11
+  const isTwitchLive = isLive && !!member.channel_id_twitch && (!member.live_video_id || member.live_video_id.length !== 11)
+
   // 決定點擊後的連結
   // 優先級：YouTube 直播影片 > Twitch 直播頻道 > YouTube 頻道首頁
   let linkUrl = '#'
   if (member.is_live) {
-    if (member.live_video_id) {
-      // YouTube 直播或待機室
+    if (isYouTubeLive && member.live_video_id) {
+      // YouTube 直播或待機室（11 字元 ID）
       linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
-    } else if (member.channel_id_twitch) {
-      // Twitch 直播（live_video_id 為 null 且 channel_id_twitch 存在）
+    } else if (isTwitchLive && member.channel_id_twitch) {
+      // Twitch 直播
       const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh] || member.channel_id_twitch
       linkUrl = `https://www.twitch.tv/${twitchLogin}`
     } else if (member.channel_id_yt) {
@@ -191,14 +203,6 @@ function LiveMemberItem({
     // 非直播狀態，導向 YouTube 頻道首頁
     linkUrl = `https://www.youtube.com/channel/${member.channel_id_yt}`
   }
-
-  const color = member.color_hex || '#888888'
-  const isLive = member.live_status === 'live'
-  const isUpcoming = member.live_status === 'upcoming'
-
-  // 判斷直播平台：如果 is_live 且 live_video_id 為 null 且有 channel_id_twitch，則是 Twitch
-  const isTwitchLive = isLive && !member.live_video_id && !!member.channel_id_twitch
-  const isYouTubeLive = isLive && !!member.live_video_id
 
   // 根據平台決定顏色
   const liveColor = isTwitchLive
@@ -340,15 +344,25 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
     'Narin Mikure': 'narinmikure',
   }
 
+  const isLive = member.live_status === 'live'
+  const isUpcoming = member.live_status === 'upcoming'
+
+  // 判斷直播平台：
+  // YouTube 影片 ID 特徵：11 個字元
+  // Twitch stream ID 特徵：純數字字串，長度不等於 11
+  // 優先判斷：如果有 channel_id_twitch 且 live_video_id 不是 11 字元，則是 Twitch
+  const isYouTubeLive = isLive && !!member.live_video_id && member.live_video_id.length === 11
+  const isTwitchLive = isLive && !!member.channel_id_twitch && (!member.live_video_id || member.live_video_id.length !== 11)
+
   // 決定點擊後的連結
   // 優先級：YouTube 直播影片 > Twitch 直播頻道 > YouTube 頻道首頁
   let linkUrl = '#'
   if (member.is_live) {
-    if (member.live_video_id) {
-      // YouTube 直播或待機室
+    if (isYouTubeLive && member.live_video_id) {
+      // YouTube 直播或待機室（11 字元 ID）
       linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
-    } else if (member.channel_id_twitch) {
-      // Twitch 直播（live_video_id 為 null 且 channel_id_twitch 存在）
+    } else if (isTwitchLive && member.channel_id_twitch) {
+      // Twitch 直播
       const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh] || member.channel_id_twitch
       linkUrl = `https://www.twitch.tv/${twitchLogin}`
     } else if (member.channel_id_yt) {
@@ -359,13 +373,6 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
     // 非直播狀態，導向 YouTube 頻道首頁
     linkUrl = `https://www.youtube.com/channel/${member.channel_id_yt}`
   }
-
-  const isLive = member.live_status === 'live'
-  const isUpcoming = member.live_status === 'upcoming'
-
-  // 判斷直播平台：如果 is_live 且 live_video_id 為 null 且有 channel_id_twitch，則是 Twitch
-  const isTwitchLive = isLive && !member.live_video_id && !!member.channel_id_twitch
-  const isYouTubeLive = isLive && !!member.live_video_id
 
   // 根據平台決定按鈕顏色
   const buttonColor = isTwitchLive
