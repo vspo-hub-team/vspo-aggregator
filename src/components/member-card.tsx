@@ -182,6 +182,11 @@ export function MemberCard({ member }: MemberCardProps) {
                   src={member.live_thumbnail}
                   alt={member.live_title || 'Live thumbnail'}
                   className="w-full h-auto object-cover"
+                  onError={(e) => {
+                    // 處理圖片載入失敗（例如 Twitch 403 錯誤）
+                    const target = e.target as HTMLImageElement
+                    target.src = 'https://via.placeholder.com/640x360/1a1a1a/ffffff?text=No+Image'
+                  }}
                 />
               </div>
             )}

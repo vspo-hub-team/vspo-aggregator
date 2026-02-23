@@ -37,12 +37,15 @@ export function VideoCard({ clip }: VideoCardProps) {
       <Card className="group overflow-hidden transition-transform hover:scale-105 cursor-pointer">
         {/* Thumbnail */}
         <div className="relative aspect-video w-full overflow-hidden bg-muted">
-          <Image
+          <img
             src={clip.thumbnail_url || 'https://via.placeholder.com/640x360'}
             alt={clip.title}
-            fill
-            className="object-cover transition-transform group-hover:scale-110"
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            className="w-full h-full object-cover transition-transform group-hover:scale-110"
+            onError={(e) => {
+              // 處理圖片載入失敗（例如 Twitch 403 錯誤）
+              const target = e.target as HTMLImageElement
+              target.src = 'https://via.placeholder.com/640x360/1a1a1a/ffffff?text=No+Image'
+            }}
           />
           {/* Duration Badge */}
           {clip.duration_sec && (

@@ -160,6 +160,11 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
             src={video.thumbnail_url || 'https://via.placeholder.com/640x360'}
             alt={video.title}
             className="w-full h-full object-cover transition-transform group-hover:scale-110"
+            onError={(e) => {
+              // 處理圖片載入失敗（例如 Twitch 403 錯誤）
+              const target = e.target as HTMLImageElement
+              target.src = 'https://via.placeholder.com/640x360/1a1a1a/ffffff?text=No+Image'
+            }}
           />
           {/* 影片類型標籤 */}
           {getTypeBadge()}
