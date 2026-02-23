@@ -29,10 +29,13 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
 
       // ===== 第一順位：同場直播所有剪輯（精準關聯） =====
       try {
+        // Debug: 檢查當前影片資料
+        console.log('Current Video Data:', video)
+        
         // 取得當前影片的 YouTube Video ID
         // 注意：video.id 可能是 UUID，video.video_id 才是 YouTube Video ID
-        // 但根據實際使用情況，video.id 可能就是 YouTube Video ID
         const currentVideoId = (video as any).video_id || video.id
+        console.log('Current Video ID:', currentVideoId)
 
         // 情況 1：如果點擊的是直播/存檔 (live/archive)
         if (video.video_type === 'live' || video.video_type === 'archive') {
@@ -58,16 +61,23 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
               const clipVideoIds = clipsData.map(c => c.video_id).filter(Boolean)
 
               // 3. 通過 clips.video_id 去 videos 表找對應的影片資料
-              // 注意：videos.id 可能就是 YouTube Video ID（根據實際使用情況）
+              // 注意：videos.id 是 UUID，videos.video_id 才是 YouTube Video ID
               if (clipVideoIds.length > 0) {
-                // 直接通過 videos.id 查詢（假設 id 就是 YouTube Video ID）
-                const { data: videosData } = await supabase
+                console.log('Clip Video IDs (情況1):', clipVideoIds)
+                // 使用 video_id 欄位進行比對（TEXT 型別）
+                const { data: videosData, error: videosError } = await supabase
                   .from('videos')
                   .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
-                  .in('id', clipVideoIds) // 直接使用 clips.video_id 作為 videos.id 查詢
+                  .in('video_id', clipVideoIds) // 使用 video_id 欄位比對（TEXT 型別）
                   .not('clipper_id', 'is', null) // 只取精華
                   .order('published_at', { ascending: false })
                   .limit(20)
+                
+                if (videosError) {
+                  console.warn('第一順位（同場直播-情況1）videos 查詢錯誤:', videosError)
+                } else {
+                  console.log('第一順位（同場直播-情況1）找到的影片:', videosData?.length || 0)
+                }
 
                 if (videosData && videosData.length > 0) {
                   // 前端過濾：排除當前影片
@@ -108,16 +118,23 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
               const clipVideoIds = clipsData.map(c => c.video_id).filter(Boolean)
 
               // 3. 通過 clips.video_id 去 videos 表找對應的影片資料
-              // 注意：videos.id 可能就是 YouTube Video ID（根據實際使用情況）
+              // 注意：videos.id 是 UUID，videos.video_id 才是 YouTube Video ID
               if (clipVideoIds.length > 0) {
-                // 直接通過 videos.id 查詢（假設 id 就是 YouTube Video ID）
-                const { data: videosData } = await supabase
+                console.log('Clip Video IDs (情況2):', clipVideoIds)
+                // 使用 video_id 欄位進行比對（TEXT 型別）
+                const { data: videosData, error: videosError } = await supabase
                   .from('videos')
                   .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
-                  .in('id', clipVideoIds) // 直接使用 clips.video_id 作為 videos.id 查詢
+                  .in('video_id', clipVideoIds) // 使用 video_id 欄位比對（TEXT 型別）
                   .not('clipper_id', 'is', null) // 只取精華
                   .order('published_at', { ascending: false })
                   .limit(20)
+                
+                if (videosError) {
+                  console.warn('第一順位（同場直播-情況2）videos 查詢錯誤:', videosError)
+                } else {
+                  console.log('第一順位（同場直播-情況2）找到的影片:', videosData?.length || 0)
+                }
 
                 if (videosData && videosData.length > 0) {
                   // 前端過濾：排除當前影片
@@ -139,18 +156,28 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
       }
 
       // ===== 第二順位：同成員推薦（Fallback） =====
-      if (results.length < 3 && video.member_id) {
+      // 確保 member_id 確實有值（可能被關聯展開為 member?.id）
+      const actualMemberId = video.member_id || (video as any).member?.id
+      console.log('Actual Member ID:', actualMemberId, 'from video.member_id:', video.member_id, 'from video.member?.id:', (video as any).member?.id)
+      
+      if (results.length < 3 && actualMemberId) {
         try {
           // 只查詢基礎欄位，只使用 UUID 比對（member_id 確定是 UUID）
           const { data: videosData, error } = await supabase
             .from('videos')
             .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
-            .eq('member_id', video.member_id) // 同成員（member_id 是 UUID，絕對安全）
+            .eq('member_id', actualMemberId) // 同成員（member_id 是 UUID，絕對安全）
             .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
             .neq('video_type', 'live') // 排除直播
             .neq('video_type', 'archive') // 排除存檔
             .order('published_at', { ascending: false })
             .limit(12) // 多取一些，以便前端過濾後仍有足夠數量
+          
+          if (error) {
+            console.warn('第二順位查詢錯誤:', error)
+          } else {
+            console.log('第二順位（同成員）找到的影片:', videosData?.length || 0)
+          }
 
           if (error) {
             console.warn('第二順位查詢錯誤:', error)
