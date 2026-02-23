@@ -76,12 +76,13 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
   }
 
   // 判斷是否有 Twitch 直播（用於決定容器邊框顏色）
-  // YouTube 影片 ID 特徵：11 個字元；Twitch stream ID：純數字字串，長度不等於 11
+  // Twitch stream ID 特徵：純數字字串（使用正則表達式判斷）
+  // YouTube 影片 ID 特徵：包含字母和符號（非純數字）
   const hasTwitchLive = sortedMembers.some(
-    (m) => m.is_live && !!m.channel_id_twitch && (!m.live_video_id || m.live_video_id.length !== 11)
+    (m) => m.is_live && !!m.channel_id_twitch && !!m.live_video_id && /^\d+$/.test(m.live_video_id)
   )
   const hasYouTubeLive = sortedMembers.some(
-    (m) => m.is_live && !!m.live_video_id && m.live_video_id.length === 11
+    (m) => m.is_live && !!m.live_video_id && !/^\d+$/.test(m.live_video_id)
   )
   // 如果同時有兩種平台，優先顯示 Twitch 的紫色；否則根據實際情況顯示
   const containerBorderColor = hasTwitchLive
@@ -178,11 +179,10 @@ function LiveMemberItem({
   const isUpcoming = member.live_status === 'upcoming'
 
   // 判斷直播平台：
-  // YouTube 影片 ID 特徵：11 個字元
-  // Twitch stream ID 特徵：純數字字串，長度不等於 11
-  // 優先判斷：如果有 channel_id_twitch 且 live_video_id 不是 11 字元，則是 Twitch
-  const isYouTubeLive = isLive && !!member.live_video_id && member.live_video_id.length === 11
-  const isTwitchLive = isLive && !!member.channel_id_twitch && (!member.live_video_id || member.live_video_id.length !== 11)
+  // Twitch stream ID 特徵：純數字字串（使用正則表達式判斷）
+  // YouTube 影片 ID 特徵：包含字母和符號（非純數字）
+  const isTwitchLive = isLive && !!member.channel_id_twitch && !!member.live_video_id && /^\d+$/.test(member.live_video_id)
+  const isYouTubeLive = isLive && !!member.live_video_id && !/^\d+$/.test(member.live_video_id)
 
   // 決定點擊後的連結
   // 優先級：YouTube 直播影片 > Twitch 直播頻道 > YouTube 頻道首頁
@@ -348,18 +348,17 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
   const isUpcoming = member.live_status === 'upcoming'
 
   // 判斷直播平台：
-  // YouTube 影片 ID 特徵：11 個字元
-  // Twitch stream ID 特徵：純數字字串，長度不等於 11
-  // 優先判斷：如果有 channel_id_twitch 且 live_video_id 不是 11 字元，則是 Twitch
-  const isYouTubeLive = isLive && !!member.live_video_id && member.live_video_id.length === 11
-  const isTwitchLive = isLive && !!member.channel_id_twitch && (!member.live_video_id || member.live_video_id.length !== 11)
+  // Twitch stream ID 特徵：純數字字串（使用正則表達式判斷）
+  // YouTube 影片 ID 特徵：包含字母和符號（非純數字）
+  const isTwitchLive = isLive && !!member.channel_id_twitch && !!member.live_video_id && /^\d+$/.test(member.live_video_id)
+  const isYouTubeLive = isLive && !!member.live_video_id && !/^\d+$/.test(member.live_video_id)
 
   // 決定點擊後的連結
   // 優先級：YouTube 直播影片 > Twitch 直播頻道 > YouTube 頻道首頁
   let linkUrl = '#'
   if (member.is_live) {
     if (isYouTubeLive && member.live_video_id) {
-      // YouTube 直播或待機室（11 字元 ID）
+      // YouTube 直播或待機室
       linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
     } else if (isTwitchLive && member.channel_id_twitch) {
       // Twitch 直播

@@ -20,11 +20,10 @@ export function MemberCard({ member }: MemberCardProps) {
   const color = member.color_hex || '#888888'
 
   // 判斷直播平台：
-  // YouTube 影片 ID 特徵：11 個字元
-  // Twitch stream ID 特徵：純數字字串，長度不等於 11
-  // 優先判斷：如果有 channel_id_twitch 且 live_video_id 不是 11 字元，則是 Twitch
-  const isYouTubeLive = member.is_live && !!member.live_video_id && member.live_video_id.length === 11
-  const isTwitchLive = member.is_live && !!member.channel_id_twitch && (!member.live_video_id || member.live_video_id.length !== 11)
+  // Twitch stream ID 特徵：純數字字串（使用正則表達式判斷）
+  // YouTube 影片 ID 特徵：包含字母和符號（非純數字）
+  const isTwitchLive = member.is_live && !!member.channel_id_twitch && !!member.live_video_id && /^\d+$/.test(member.live_video_id)
+  const isYouTubeLive = member.is_live && !!member.live_video_id && !/^\d+$/.test(member.live_video_id)
 
   // 決定邊框顏色：根據平台決定顏色，否則用成員代表色
   const liveColor = isTwitchLive
