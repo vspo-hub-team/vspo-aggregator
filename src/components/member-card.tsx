@@ -19,11 +19,11 @@ export function MemberCard({ member }: MemberCardProps) {
 
   const color = member.color_hex || '#888888'
 
-  // 判斷直播平台：
-  // Twitch stream ID 特徵：純數字字串（使用正則表達式判斷）
-  // YouTube 影片 ID 特徵：包含字母和符號（非純數字）
-  const isTwitchLive = member.is_live && !!member.channel_id_twitch && !!member.live_video_id && /^\d+$/.test(member.live_video_id)
-  const isYouTubeLive = member.is_live && !!member.live_video_id && !/^\d+$/.test(member.live_video_id)
+  // 判斷直播平台：使用縮圖網域判斷（最可靠）
+  // Twitch 的縮圖一定來自 jtvnw.net
+  const isTwitchLive = member.is_live && member.live_thumbnail && member.live_thumbnail.includes('jtvnw.net')
+  // YouTube 的縮圖通常來自 ytimg.com (或是非 Twitch 即為 YouTube)
+  const isYouTubeLive = member.is_live && !isTwitchLive
 
   // 決定邊框顏色：根據平台決定顏色，否則用成員代表色
   const liveColor = isTwitchLive
@@ -34,8 +34,11 @@ export function MemberCard({ member }: MemberCardProps) {
   const borderColor = member.is_live ? liveColor : color
 
   // 決定陰影顏色：直播中陰影更強烈
+  // Twitch 使用紫色陰影，YouTube 使用紅色陰影
   const shadowStyle = member.is_live
-    ? `0 0 15px ${borderColor}, 0 0 5px ${borderColor}`
+    ? isTwitchLive
+      ? '0 0 15px rgba(168, 85, 247, 0.5), 0 0 5px rgba(168, 85, 247, 0.5)'
+      : `0 0 15px ${borderColor}, 0 0 5px ${borderColor}`
     : `0 0 10px ${color}40`
 
   // Twitch Login Name Mapping（與 member/[id]/page.tsx 保持一致）
@@ -71,16 +74,16 @@ export function MemberCard({ member }: MemberCardProps) {
   }
 
   // 決定點擊後的連結
-  // 優先級：YouTube 直播影片 > Twitch 直播頻道 > YouTube 頻道首頁
+  // 優先級：Twitch 直播頻道 > YouTube 直播影片 > YouTube 頻道首頁
   let linkUrl = '#'
   if (member.is_live) {
-    if (isYouTubeLive && member.live_video_id) {
-      // YouTube 直播或待機室（11 字元 ID）
-      linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
-    } else if (isTwitchLive && member.channel_id_twitch) {
-      // Twitch 直播
+    if (isTwitchLive && member.channel_id_twitch) {
+      // Twitch 直播（優先）
       const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh] || member.channel_id_twitch
       linkUrl = `https://www.twitch.tv/${twitchLogin}`
+    } else if (isYouTubeLive && member.live_video_id) {
+      // YouTube 直播或待機室
+      linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
     } else if (member.channel_id_yt) {
       // 備用：YouTube 頻道首頁
       linkUrl = `https://www.youtube.com/channel/${member.channel_id_yt}`
@@ -107,7 +110,9 @@ export function MemberCard({ member }: MemberCardProps) {
       className="block group relative"
     >
       <div
-        className="relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all duration-300 bg-gray-900/50 backdrop-blur-sm group-hover:scale-105 group-hover:-translate-y-1"
+        className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all duration-300 bg-gray-900/50 backdrop-blur-sm group-hover:scale-105 group-hover:-translate-y-1 ${
+          isTwitchLive ? 'border-purple-500/50 ring-2 ring-purple-500' : ''
+        }`}
         style={{
           borderColor: borderColor,
           boxShadow: shadowStyle,
@@ -116,8 +121,10 @@ export function MemberCard({ member }: MemberCardProps) {
         {/* 直播中的標籤 (絕對定位在右上角，根據平台顯示不同顏色) */}
         {member.is_live && (
           <div
-            className="absolute top-2 right-2 px-2 py-0.5 text-white text-xs font-bold rounded animate-pulse z-10"
-            style={{ backgroundColor: liveColor }}
+            className={`absolute top-2 right-2 px-2 py-0.5 text-white text-xs font-bold rounded animate-pulse z-10 ${
+              isTwitchLive ? 'bg-purple-600' : isYouTubeLive ? 'bg-red-600' : ''
+            }`}
+            style={!isTwitchLive && !isYouTubeLive ? { backgroundColor: liveColor } : undefined}
           >
             LIVE
           </div>
@@ -137,7 +144,7 @@ export function MemberCard({ member }: MemberCardProps) {
               alt={member.name_jp}
               className={`w-full h-full object-cover rounded-full border-2 ${
                 member.is_live ? 'animate-pulse' : ''
-              }`}
+              } ${isTwitchLive ? 'ring-2 ring-purple-500' : ''}`}
               style={{ borderColor: borderColor }}
               onError={() => {
                 setImageError(true)

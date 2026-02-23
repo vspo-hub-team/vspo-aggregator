@@ -76,13 +76,14 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
   }
 
   // 判斷是否有 Twitch 直播（用於決定容器邊框顏色）
-  // Twitch stream ID 特徵：純數字字串（使用正則表達式判斷）
-  // YouTube 影片 ID 特徵：包含字母和符號（非純數字）
+  // 使用縮圖網域判斷（最可靠）
+  // Twitch 的縮圖一定來自 jtvnw.net
   const hasTwitchLive = sortedMembers.some(
-    (m) => m.is_live && !!m.channel_id_twitch && !!m.live_video_id && /^\d+$/.test(m.live_video_id)
+    (m) => m.is_live && m.live_thumbnail && m.live_thumbnail.includes('jtvnw.net')
   )
+  // YouTube 的縮圖通常來自 ytimg.com (或是非 Twitch 即為 YouTube)
   const hasYouTubeLive = sortedMembers.some(
-    (m) => m.is_live && !!m.live_video_id && !/^\d+$/.test(m.live_video_id)
+    (m) => m.is_live && m.live_thumbnail && !m.live_thumbnail.includes('jtvnw.net')
   )
   // 如果同時有兩種平台，優先顯示 Twitch 的紫色；否則根據實際情況顯示
   const containerBorderColor = hasTwitchLive
@@ -178,23 +179,23 @@ function LiveMemberItem({
   const isLive = member.live_status === 'live'
   const isUpcoming = member.live_status === 'upcoming'
 
-  // 判斷直播平台：
-  // Twitch stream ID 特徵：純數字字串（使用正則表達式判斷）
-  // YouTube 影片 ID 特徵：包含字母和符號（非純數字）
-  const isTwitchLive = isLive && !!member.channel_id_twitch && !!member.live_video_id && /^\d+$/.test(member.live_video_id)
-  const isYouTubeLive = isLive && !!member.live_video_id && !/^\d+$/.test(member.live_video_id)
+  // 判斷直播平台：使用縮圖網域判斷（最可靠）
+  // Twitch 的縮圖一定來自 jtvnw.net
+  const isTwitchLive = isLive && member.live_thumbnail && member.live_thumbnail.includes('jtvnw.net')
+  // YouTube 的縮圖通常來自 ytimg.com (或是非 Twitch 即為 YouTube)
+  const isYouTubeLive = isLive && !isTwitchLive
 
   // 決定點擊後的連結
-  // 優先級：YouTube 直播影片 > Twitch 直播頻道 > YouTube 頻道首頁
+  // 優先級：Twitch 直播頻道 > YouTube 直播影片 > YouTube 頻道首頁
   let linkUrl = '#'
   if (member.is_live) {
-    if (isYouTubeLive && member.live_video_id) {
-      // YouTube 直播或待機室（11 字元 ID）
-      linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
-    } else if (isTwitchLive && member.channel_id_twitch) {
-      // Twitch 直播
+    if (isTwitchLive && member.channel_id_twitch) {
+      // Twitch 直播（優先）
       const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh] || member.channel_id_twitch
       linkUrl = `https://www.twitch.tv/${twitchLogin}`
+    } else if (isYouTubeLive && member.live_video_id) {
+      // YouTube 直播或待機室
+      linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
     } else if (member.channel_id_yt) {
       // 備用：YouTube 頻道首頁
       linkUrl = `https://www.youtube.com/channel/${member.channel_id_yt}`
@@ -255,11 +256,15 @@ function LiveMemberItem({
               alt={member.name_jp}
               className={`w-14 h-14 md:w-16 md:h-16 object-cover rounded-full border-2 ${
                 isLive ? 'animate-pulse' : ''
-              } ${isUpcoming ? 'grayscale' : ''}`}
+              } ${isUpcoming ? 'grayscale' : ''} ${
+                isTwitchLive ? 'ring-2 ring-purple-500 border-purple-500/50' : ''
+              }`}
               style={{
                 borderColor: isLive ? liveColor : isUpcoming ? '#9ca3af' : '#888888',
                 boxShadow: isLive
-                  ? `0 0 15px ${liveColor}, 0 0 5px ${liveColor}`
+                  ? isTwitchLive
+                    ? '0 0 15px rgba(168, 85, 247, 0.5), 0 0 5px rgba(168, 85, 247, 0.5)'
+                    : `0 0 15px ${liveColor}, 0 0 5px ${liveColor}`
                   : isUpcoming
                     ? '0 0 10px #9ca3af, 0 0 3px #9ca3af'
                     : 'none',
@@ -272,12 +277,14 @@ function LiveMemberItem({
             <div
               className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center border-2 text-xl md:text-2xl ${
                 isUpcoming ? 'grayscale' : ''
-              }`}
+              } ${isTwitchLive ? 'ring-2 ring-purple-500 border-purple-500/50' : ''}`}
               style={{
                 backgroundColor: `${color}20`,
                 borderColor: isLive ? liveColor : isUpcoming ? '#9ca3af' : '#888888',
                 boxShadow: isLive
-                  ? `0 0 15px ${liveColor}, 0 0 5px ${liveColor}`
+                  ? isTwitchLive
+                    ? '0 0 15px rgba(168, 85, 247, 0.5), 0 0 5px rgba(168, 85, 247, 0.5)'
+                    : `0 0 15px ${liveColor}, 0 0 5px ${liveColor}`
                   : isUpcoming
                     ? '0 0 10px #9ca3af, 0 0 3px #9ca3af'
                     : 'none',
@@ -347,23 +354,23 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
   const isLive = member.live_status === 'live'
   const isUpcoming = member.live_status === 'upcoming'
 
-  // 判斷直播平台：
-  // Twitch stream ID 特徵：純數字字串（使用正則表達式判斷）
-  // YouTube 影片 ID 特徵：包含字母和符號（非純數字）
-  const isTwitchLive = isLive && !!member.channel_id_twitch && !!member.live_video_id && /^\d+$/.test(member.live_video_id)
-  const isYouTubeLive = isLive && !!member.live_video_id && !/^\d+$/.test(member.live_video_id)
+  // 判斷直播平台：使用縮圖網域判斷（最可靠）
+  // Twitch 的縮圖一定來自 jtvnw.net
+  const isTwitchLive = isLive && member.live_thumbnail && member.live_thumbnail.includes('jtvnw.net')
+  // YouTube 的縮圖通常來自 ytimg.com (或是非 Twitch 即為 YouTube)
+  const isYouTubeLive = isLive && !isTwitchLive
 
   // 決定點擊後的連結
-  // 優先級：YouTube 直播影片 > Twitch 直播頻道 > YouTube 頻道首頁
+  // 優先級：Twitch 直播頻道 > YouTube 直播影片 > YouTube 頻道首頁
   let linkUrl = '#'
   if (member.is_live) {
-    if (isYouTubeLive && member.live_video_id) {
-      // YouTube 直播或待機室
-      linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
-    } else if (isTwitchLive && member.channel_id_twitch) {
-      // Twitch 直播
+    if (isTwitchLive && member.channel_id_twitch) {
+      // Twitch 直播（優先）
       const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh] || member.channel_id_twitch
       linkUrl = `https://www.twitch.tv/${twitchLogin}`
+    } else if (isYouTubeLive && member.live_video_id) {
+      // YouTube 直播或待機室
+      linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
     } else if (member.channel_id_yt) {
       // 備用：YouTube 頻道首頁
       linkUrl = `https://www.youtube.com/channel/${member.channel_id_yt}`
@@ -417,8 +424,10 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
         <div className="flex items-center justify-center pt-1">
           {isLive ? (
             <span
-              className="px-3 py-1 text-white text-xs font-bold rounded-full"
-              style={{ backgroundColor: buttonColor }}
+              className={`px-3 py-1 text-white text-xs font-bold rounded-full ${
+                isTwitchLive ? 'bg-purple-600' : isYouTubeLive ? 'bg-red-600' : ''
+              }`}
+              style={!isTwitchLive && !isYouTubeLive ? { backgroundColor: buttonColor } : undefined}
             >
               WATCH NOW
             </span>
@@ -428,8 +437,10 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
             </span>
           ) : (
             <span
-              className="px-3 py-1 text-white text-xs font-bold rounded-full"
-              style={{ backgroundColor: buttonColor }}
+              className={`px-3 py-1 text-white text-xs font-bold rounded-full ${
+                isTwitchLive ? 'bg-purple-600' : isYouTubeLive ? 'bg-red-600' : ''
+              }`}
+              style={!isTwitchLive && !isYouTubeLive ? { backgroundColor: buttonColor } : undefined}
             >
               ON AIR
             </span>
