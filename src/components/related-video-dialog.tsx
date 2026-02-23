@@ -20,30 +20,61 @@ interface RelatedVideoDialogProps {
 }
 
 export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDialogProps) {
-  // 三層降級查詢：確保總是有影片可以推薦（簡化版，只使用 videos 表）
+  // 極簡化查詢：只使用基礎欄位，確保一定能查詢到資料
   const { data: relatedVideos = [], isLoading } = useQuery({
-    queryKey: ['related-clips', video.id, video.video_id, video.member_id],
+    queryKey: ['related-clips', video.id, video.member_id],
     queryFn: async () => {
       let results: Video[] = []
 
-      // ===== 第一順位：同成員的近期精華（最安全的方式） =====
+      // ===== 第一順位：同成員推薦（最簡單直接） =====
       if (video.member_id) {
         try {
-          const { data: videosData } = await supabase
+          // 只查詢基礎欄位，不進行 JOIN
+          const { data: videosData, error } = await supabase
             .from('videos')
-            .select('*, member:members(*), clipper:clippers(*)')
-            .eq('member_id', video.member_id)
-            .not('clipper_id', 'is', null)
-            .neq('video_type', 'live')
-            .neq('video_type', 'archive')
+            .select('id, video_id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
+            .eq('member_id', video.member_id) // 同成員
+            .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
+            .neq('video_type', 'live') // 排除直播
+            .neq('video_type', 'archive') // 排除存檔
             .neq('id', video.id) // 排除當前影片
             .order('published_at', { ascending: false })
-            .limit(10)
+            .limit(6)
 
-          if (videosData && videosData.length > 0) {
+          if (error) {
+            console.warn('第一順位查詢錯誤:', error)
+          } else if (videosData && videosData.length > 0) {
+            // 如果需要關聯資料，再單獨查詢
+            const memberIds = [...new Set(videosData.map(v => v.member_id).filter(Boolean))]
+            const clipperIds = [...new Set(videosData.map(v => v.clipper_id).filter(Boolean))]
+
+            let membersMap = new Map()
+            let clippersMap = new Map()
+
+            if (memberIds.length > 0) {
+              const { data: membersData } = await supabase
+                .from('members')
+                .select('*')
+                .in('id', memberIds)
+              if (membersData) {
+                membersData.forEach(m => membersMap.set(m.id, m))
+              }
+            }
+
+            if (clipperIds.length > 0) {
+              const { data: clippersData } = await supabase
+                .from('clippers')
+                .select('*')
+                .in('id', clipperIds)
+              if (clippersData) {
+                clippersData.forEach(c => clippersMap.set(c.id, c))
+              }
+            }
+
             results = videosData.map((v: any) => ({
               ...v,
-              members: v.member || null,
+              members: membersMap.get(v.member_id) || null,
+              clipper: clippersMap.get(v.clipper_id) || null,
             })) as Video[]
           }
         } catch (error) {
@@ -51,76 +82,70 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
         }
       }
 
-      // ===== 第二順位：全站熱門精華（Fallback） =====
+      // ===== 第二順位：全站最新精華（無腦 Fallback） =====
       if (results.length < 3) {
         try {
-          // 計算 3 天前的時間
-          const threeDaysAgo = new Date()
-          threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
-          const threeDaysAgoISO = threeDaysAgo.toISOString()
-
-          // 查詢近 3 天內觀看數最高的精華影片
-          const { data: videosData } = await supabase
+          // 只查詢基礎欄位
+          const { data: videosData, error } = await supabase
             .from('videos')
-            .select('*, member:members(*), clipper:clippers(*)')
-            .not('clipper_id', 'is', null)
-            .neq('video_type', 'live')
-            .neq('video_type', 'archive')
+            .select('id, video_id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
+            .not('clipper_id', 'is', null) // 只取精華
+            .neq('video_type', 'live') // 排除直播
+            .neq('video_type', 'archive') // 排除存檔
             .neq('id', video.id) // 排除當前影片
-            .gte('published_at', threeDaysAgoISO)
-            .order('view_count', { ascending: false })
-            .limit(20)
+            .order('published_at', { ascending: false })
+            .limit(6)
 
-          if (videosData && videosData.length > 0) {
-            const popularClips = videosData.map((v: any) => ({
+          if (error) {
+            console.warn('第二順位查詢錯誤:', error)
+          } else if (videosData && videosData.length > 0) {
+            // 如果需要關聯資料，再單獨查詢
+            const memberIds = [...new Set(videosData.map(v => v.member_id).filter(Boolean))]
+            const clipperIds = [...new Set(videosData.map(v => v.clipper_id).filter(Boolean))]
+
+            let membersMap = new Map()
+            let clippersMap = new Map()
+
+            if (memberIds.length > 0) {
+              const { data: membersData } = await supabase
+                .from('members')
+                .select('*')
+                .in('id', memberIds)
+              if (membersData) {
+                membersData.forEach(m => membersMap.set(m.id, m))
+              }
+            }
+
+            if (clipperIds.length > 0) {
+              const { data: clippersData } = await supabase
+                .from('clippers')
+                .select('*')
+                .in('id', clipperIds)
+              if (clippersData) {
+                clippersData.forEach(c => clippersMap.set(c.id, c))
+              }
+            }
+
+            const newClips = videosData.map((v: any) => ({
               ...v,
-              members: v.member || null,
+              members: membersMap.get(v.member_id) || null,
+              clipper: clippersMap.get(v.clipper_id) || null,
             })) as Video[]
 
             // 合併結果，避免重複
             const existingIds = new Set(results.map(v => v.id))
-            const newClips = popularClips.filter(v => !existingIds.has(v.id))
-            results = [...results, ...newClips]
+            const uniqueClips = newClips.filter(v => !existingIds.has(v.id))
+            results = [...results, ...uniqueClips]
           }
         } catch (error) {
           console.warn('第二順位查詢失敗:', error)
         }
       }
 
-      // ===== 第三順位：全站最新精華（最終 Fallback） =====
-      if (results.length < 3) {
-        try {
-          const { data: videosData } = await supabase
-            .from('videos')
-            .select('*, member:members(*), clipper:clippers(*)')
-            .not('clipper_id', 'is', null)
-            .neq('video_type', 'live')
-            .neq('video_type', 'archive')
-            .neq('id', video.id) // 排除當前影片
-            .order('published_at', { ascending: false })
-            .limit(20)
-
-          if (videosData && videosData.length > 0) {
-            const randomClips = videosData.map((v: any) => ({
-              ...v,
-              members: v.member || null,
-            })) as Video[]
-
-            const existingIds = new Set(results.map(v => v.id))
-            const newClips = randomClips
-              .filter(v => !existingIds.has(v.id))
-              .slice(0, 6 - results.length) // 確保總數不超過 6 部
-            results = [...results, ...newClips]
-          }
-        } catch (error) {
-          console.warn('第三順位查詢失敗:', error)
-        }
-      }
-
-      // 確保至少返回 3-6 部影片（如果有的話）
+      // 確保返回最多 6 部影片
       return results.slice(0, 6)
     },
-    enabled: open && (video.video_type === 'archive' || video.video_type === 'live'), // 只對存檔或直播影片查詢
+    enabled: open, // 對所有影片都查詢
   })
 
   return (
