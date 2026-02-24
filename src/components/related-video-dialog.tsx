@@ -24,6 +24,13 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
   const { data: relatedVideosData, isLoading } = useQuery<{ videos: Video[] }>({
     queryKey: ['related-videos', video.id, video.related_stream_id, video.video_type],
     queryFn: async () => {
+      // 🔍 照妖鏡：檢查點擊的影片完整資料
+      console.log('🔍 照妖鏡 - 點擊的影片完整資料:', video)
+      console.log('🔍 照妖鏡 - video.related_stream_id 值:', video.related_stream_id)
+      console.log('🔍 照妖鏡 - video.related_stream_id 類型:', typeof video.related_stream_id)
+      console.log('🔍 照妖鏡 - video.related_stream_id === null:', video.related_stream_id === null)
+      console.log('🔍 照妖鏡 - video.related_stream_id === undefined:', video.related_stream_id === undefined)
+      
       let streamId: string | null = null
 
       // 情況 1：如果點擊的是精華（有 related_stream_id）
