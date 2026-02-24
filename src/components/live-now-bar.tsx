@@ -14,41 +14,75 @@ interface TooltipPosition {
   y: number
 }
 
+// 定義直播項目類型（用於渲染）
+interface LiveItem {
+  member: Member
+  platform: 'youtube' | 'twitch'
+  isLive: boolean
+  isUpcoming: boolean
+}
+
 export function LiveNowBar({ members }: LiveNowBarProps) {
-  // State: 紀錄目前滑鼠移到了哪位成員
-  const [hoveredMember, setHoveredMember] = useState<Member | null>(null)
+  // State: 紀錄目前滑鼠移到了哪個直播項目
+  const [hoveredItem, setHoveredItem] = useState<LiveItem | null>(null)
   const [tooltipPos, setTooltipPos] = useState<TooltipPosition>({ x: 0, y: 0 })
 
-  // 過濾：只保留 live 或 upcoming 狀態的成員
-  const filteredMembers = members.filter(
-    (member) => member.live_status === 'live' || member.live_status === 'upcoming'
-  )
+  // 構建直播項目列表（支援雙平台同時直播）
+  // 如果成員在兩個平台都在直播，會產生兩個項目
+  const liveItems: LiveItem[] = []
+  
+  for (const member of members) {
+    // 檢查 YouTube 直播狀態
+    const hasYouTubeLive = member.live_status === 'live' || member.live_status === 'upcoming'
+    // 檢查 Twitch 直播狀態
+    const hasTwitchLive = member.live_status_twitch === 'live' || member.live_status_twitch === 'upcoming'
+    
+    if (hasYouTubeLive) {
+      liveItems.push({
+        member,
+        platform: 'youtube',
+        isLive: member.live_status === 'live',
+        isUpcoming: member.live_status === 'upcoming'
+      })
+    }
+    
+    if (hasTwitchLive) {
+      liveItems.push({
+        member,
+        platform: 'twitch',
+        isLive: member.live_status_twitch === 'live',
+        isUpcoming: member.live_status_twitch === 'upcoming'
+      })
+    }
+  }
 
   // 排序：
-  // 1. 第一順位：live_status === 'live' 的成員
-  // 2. 第二順位：live_status === 'upcoming' 的成員，按 live_start_time 由早到晚排序
-  const sortedMembers = [...filteredMembers].sort((a, b) => {
+  // 1. 第一順位：isLive === true 的項目
+  // 2. 第二順位：isUpcoming === true 的項目，按 live_start_time 由早到晚排序
+  const sortedItems = [...liveItems].sort((a, b) => {
     // 如果 a 是 live，b 是 upcoming，a 排在前面
-    if (a.live_status === 'live' && b.live_status === 'upcoming') {
+    if (a.isLive && b.isUpcoming) {
       return -1
     }
     // 如果 a 是 upcoming，b 是 live，b 排在前面
-    if (a.live_status === 'upcoming' && b.live_status === 'live') {
+    if (a.isUpcoming && b.isLive) {
       return 1
     }
     // 如果兩者都是 upcoming，按 live_start_time 由早到晚排序
-    if (a.live_status === 'upcoming' && b.live_status === 'upcoming') {
-      if (!a.live_start_time && !b.live_start_time) return 0
-      if (!a.live_start_time) return 1 // 沒有時間的排在後面
-      if (!b.live_start_time) return -1
-      return new Date(a.live_start_time).getTime() - new Date(b.live_start_time).getTime()
+    if (a.isUpcoming && b.isUpcoming) {
+      const aTime = a.platform === 'youtube' ? a.member.live_start_time : a.member.live_start_time_twitch
+      const bTime = b.platform === 'youtube' ? b.member.live_start_time : b.member.live_start_time_twitch
+      if (!aTime && !bTime) return 0
+      if (!aTime) return 1 // 沒有時間的排在後面
+      if (!bTime) return -1
+      return new Date(aTime).getTime() - new Date(bTime).getTime()
     }
     // 如果兩者都是 live，保持原順序
     return 0
   })
 
-  // 空狀態處理：如果沒有任何成員，顯示提示訊息
-  if (sortedMembers.length === 0) {
+  // 空狀態處理：如果沒有任何直播項目，顯示提示訊息
+  if (sortedItems.length === 0) {
     return (
       <div className="relative z-50 mb-6 rounded-xl border border-gray-700/30 bg-gray-900/80 backdrop-blur-md shadow-lg">
         <div className="flex items-center justify-center p-6">
@@ -59,7 +93,7 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
   }
 
   // 處理滑鼠進入事件
-  const handleMouseEnter = (member: Member, event: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseEnter = (item: LiveItem, event: React.MouseEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
     // 計算 Tooltip 應該出現的位置 (頭像正下方中心)
     // x: 頭像中心點的水平位置
@@ -67,24 +101,18 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
     const x = rect.left + rect.width / 2
     const y = rect.bottom + 8 // 8px 間距 (mt-2)
     setTooltipPos({ x, y })
-    setHoveredMember(member)
+    setHoveredItem(item)
   }
 
   // 處理滑鼠離開事件
   const handleMouseLeave = () => {
-    setHoveredMember(null)
+    setHoveredItem(null)
   }
 
   // 判斷是否有 Twitch 直播（用於決定容器邊框顏色）
-  // 使用縮圖網域判斷（最可靠）
-  // Twitch 的縮圖一定來自 jtvnw.net
-  const hasTwitchLive = sortedMembers.some(
-    (m) => m.is_live && m.live_thumbnail && m.live_thumbnail.includes('jtvnw.net')
-  )
-  // YouTube 的縮圖通常來自 ytimg.com (或是非 Twitch 即為 YouTube)
-  const hasYouTubeLive = sortedMembers.some(
-    (m) => m.is_live && m.live_thumbnail && !m.live_thumbnail.includes('jtvnw.net')
-  )
+  const hasTwitchLive = sortedItems.some(item => item.platform === 'twitch' && item.isLive)
+  // 判斷是否有 YouTube 直播
+  const hasYouTubeLive = sortedItems.some(item => item.platform === 'youtube' && item.isLive)
   // 如果同時有兩種平台，優先顯示 Twitch 的紫色；否則根據實際情況顯示
   const containerBorderColor = hasTwitchLive
     ? 'border-purple-500/30'
@@ -104,12 +132,12 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
             </span>
           </div>
 
-          {/* 成員列表 */}
+          {/* 直播項目列表（支援雙平台同時直播） */}
           <div className="flex flex-nowrap items-start gap-3 md:gap-4">
-            {sortedMembers.map((member) => (
+            {sortedItems.map((item, index) => (
               <LiveMemberItem
-                key={member.id}
-                member={member}
+                key={`${item.member.id}-${item.platform}-${index}`}
+                item={item}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
               />
@@ -119,9 +147,9 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
       </div>
 
       {/* 懸浮預覽視窗 (使用 Fixed Positioning) */}
-      {hoveredMember && (hoveredMember.live_thumbnail || hoveredMember.live_title) && (
+      {hoveredItem && (
         <Tooltip
-          member={hoveredMember}
+          item={hoveredItem}
           position={tooltipPos}
           onMouseLeave={handleMouseLeave}
         />
@@ -131,16 +159,17 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
 }
 
 interface LiveMemberItemProps {
-  member: Member
-  onMouseEnter: (member: Member, event: React.MouseEvent<HTMLDivElement>) => void
+  item: LiveItem
+  onMouseEnter: (item: LiveItem, event: React.MouseEvent<HTMLDivElement>) => void
   onMouseLeave: () => void
 }
 
 function LiveMemberItem({
-  member,
+  item,
   onMouseEnter,
   onMouseLeave,
 }: LiveMemberItemProps) {
+  const { member, platform, isLive, isUpcoming } = item
   const [imageError, setImageError] = useState(false)
 
   // Twitch Login Name Mapping（與 member-card.tsx 和 member/[id]/page.tsx 保持一致）
@@ -176,27 +205,26 @@ function LiveMemberItem({
   }
 
   const color = member.color_hex || '#888888'
-  const isLive = member.live_status === 'live'
-  const isUpcoming = member.live_status === 'upcoming'
+  const isTwitchLive = platform === 'twitch' && isLive
+  const isYouTubeLive = platform === 'youtube' && isLive
 
-  // 判斷直播平台：使用縮圖網域判斷（最可靠）
-  // Twitch 的縮圖一定來自 jtvnw.net
-  const isTwitchLive = isLive && member.live_thumbnail && member.live_thumbnail.includes('jtvnw.net')
-  // YouTube 的縮圖通常來自 ytimg.com (或是非 Twitch 即為 YouTube)
-  const isYouTubeLive = isLive && !isTwitchLive
+  // 根據平台獲取對應的直播資訊
+  const liveTitle = platform === 'youtube' ? member.live_title : member.live_title_twitch
+  const liveThumbnail = platform === 'youtube' ? member.live_thumbnail : member.live_thumbnail_twitch
+  const liveVideoId = platform === 'youtube' ? member.live_video_id : member.live_video_id_twitch
+  const liveStartTime = platform === 'youtube' ? member.live_start_time : member.live_start_time_twitch
 
   // 決定點擊後的連結
-  // 優先級：Twitch 直播頻道 > YouTube 直播影片 > YouTube 頻道首頁
   let linkUrl = '#'
-  if (member.is_live) {
-    if (isTwitchLive && member.channel_id_twitch) {
+  if (isLive || isUpcoming) {
+    if (platform === 'twitch' && member.channel_id_twitch) {
       // Twitch 直播（優先）
       const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh] || member.channel_id_twitch
       linkUrl = `https://www.twitch.tv/${twitchLogin}`
-    } else if (isYouTubeLive && member.live_video_id) {
+    } else if (platform === 'youtube' && liveVideoId) {
       // YouTube 直播或待機室
-      linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
-    } else if (member.channel_id_yt) {
+      linkUrl = `https://www.youtube.com/watch?v=${liveVideoId}`
+    } else if (platform === 'youtube' && member.channel_id_yt) {
       // 備用：YouTube 頻道首頁
       linkUrl = `https://www.youtube.com/channel/${member.channel_id_yt}`
     }
@@ -214,14 +242,14 @@ function LiveMemberItem({
 
   // 判斷是否為「準備中」狀態：upcoming 且時間已過預定開台時間
   const isPreparing = isUpcoming && 
-    member.live_start_time && 
-    new Date(member.live_start_time).getTime() <= Date.now()
+    liveStartTime && 
+    new Date(liveStartTime).getTime() <= Date.now()
 
   // 格式化開始時間 (HH:mm)
   const formatStartTime = () => {
-    if (!member.live_start_time) return null
+    if (!liveStartTime) return null
     try {
-      return format(new Date(member.live_start_time), 'HH:mm', { locale: zhTW })
+      return format(new Date(liveStartTime), 'HH:mm', { locale: zhTW })
     } catch {
       return null
     }
@@ -232,7 +260,7 @@ function LiveMemberItem({
   return (
     <div
       className="flex-shrink-0 flex flex-col items-center gap-2 relative"
-      onMouseEnter={(e) => onMouseEnter(member, e)}
+      onMouseEnter={(e) => onMouseEnter(item, e)}
       onMouseLeave={onMouseLeave}
     >
       <a
@@ -247,6 +275,16 @@ function LiveMemberItem({
           {isPreparing && (
             <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500/60 rounded-full animate-pulse z-10" 
                  title="準備中..." />
+          )}
+          
+          {/* 平台標識（如果雙平台同時直播，顯示小圖示） */}
+          {platform === 'twitch' && (
+            <div className="absolute -top-1 -left-1 w-3 h-3 bg-purple-500 rounded-full border border-white z-10" 
+                 title="Twitch" />
+          )}
+          {platform === 'youtube' && (
+            <div className="absolute -top-1 -left-1 w-3 h-3 bg-red-500 rounded-full border border-white z-10" 
+                 title="YouTube" />
           )}
           
           {/* 優先使用 member.avatar_url，如果為空或載入失敗才顯示電視機佔位符 */}
@@ -313,12 +351,13 @@ function LiveMemberItem({
 }
 
 interface TooltipProps {
-  member: Member
+  item: LiveItem
   position: TooltipPosition
   onMouseLeave: () => void
 }
 
-function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
+function Tooltip({ item, position, onMouseLeave }: TooltipProps) {
+  const { member, platform, isLive, isUpcoming } = item
   // Twitch Login Name Mapping（與 member-card.tsx 和 member/[id]/page.tsx 保持一致）
   const TWITCH_LOGINS: Record<string, string> = {
     '花芽すみれ': 'kagasumire',
@@ -351,27 +390,25 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
     'Narin Mikure': 'narinmikure',
   }
 
-  const isLive = member.live_status === 'live'
-  const isUpcoming = member.live_status === 'upcoming'
+  const isTwitchLive = platform === 'twitch' && isLive
+  const isYouTubeLive = platform === 'youtube' && isLive
 
-  // 判斷直播平台：使用縮圖網域判斷（最可靠）
-  // Twitch 的縮圖一定來自 jtvnw.net
-  const isTwitchLive = isLive && member.live_thumbnail && member.live_thumbnail.includes('jtvnw.net')
-  // YouTube 的縮圖通常來自 ytimg.com (或是非 Twitch 即為 YouTube)
-  const isYouTubeLive = isLive && !isTwitchLive
+  // 根據平台獲取對應的直播資訊
+  const liveTitle = platform === 'youtube' ? member.live_title : member.live_title_twitch
+  const liveThumbnail = platform === 'youtube' ? member.live_thumbnail : member.live_thumbnail_twitch
+  const liveVideoId = platform === 'youtube' ? member.live_video_id : member.live_video_id_twitch
 
   // 決定點擊後的連結
-  // 優先級：Twitch 直播頻道 > YouTube 直播影片 > YouTube 頻道首頁
   let linkUrl = '#'
-  if (member.is_live) {
-    if (isTwitchLive && member.channel_id_twitch) {
+  if (isLive || isUpcoming) {
+    if (platform === 'twitch' && member.channel_id_twitch) {
       // Twitch 直播（優先）
       const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh] || member.channel_id_twitch
       linkUrl = `https://www.twitch.tv/${twitchLogin}`
-    } else if (isYouTubeLive && member.live_video_id) {
+    } else if (platform === 'youtube' && liveVideoId) {
       // YouTube 直播或待機室
-      linkUrl = `https://www.youtube.com/watch?v=${member.live_video_id}`
-    } else if (member.channel_id_yt) {
+      linkUrl = `https://www.youtube.com/watch?v=${liveVideoId}`
+    } else if (platform === 'youtube' && member.channel_id_yt) {
       // 備用：YouTube 頻道首頁
       linkUrl = `https://www.youtube.com/channel/${member.channel_id_yt}`
     }
@@ -401,11 +438,11 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
       onMouseLeave={onMouseLeave}
     >
       {/* 直播縮圖 (16:9 比例) */}
-      {member.live_thumbnail && (
+      {liveThumbnail && (
         <div className="relative w-full aspect-video overflow-hidden">
           <img
-            src={member.live_thumbnail}
-            alt={member.live_title || 'Live thumbnail'}
+            src={liveThumbnail}
+            alt={liveTitle || 'Live thumbnail'}
             className={`w-full h-full object-cover ${isUpcoming ? 'grayscale' : ''}`}
             onError={(e) => {
               // 處理圖片載入失敗（例如 Twitch 403 錯誤）
@@ -419,9 +456,9 @@ function Tooltip({ member, position, onMouseLeave }: TooltipProps) {
       {/* 內容區域 */}
       <div className="p-3 space-y-2">
         {/* 直播標題 (限制 2 行) */}
-        {member.live_title && (
+        {liveTitle && (
           <p className="text-sm text-white font-medium line-clamp-2 leading-snug">
-            {member.live_title}
+            {liveTitle}
           </p>
         )}
 

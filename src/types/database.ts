@@ -8,13 +8,23 @@ export interface Member {
   channel_id_twitch: string | null
   color_hex: string | null
   avatar_url: string | null
+  // YouTube 直播狀態
   is_live: boolean
   last_live_at: string | null // ISO timestamp
-  live_video_id: string | null // 直播/待機室影片 ID
-  live_title: string | null // 直播/待機室標題
-  live_thumbnail: string | null // 直播/待機室縮圖
-  live_status: 'live' | 'upcoming' | 'none' | null // 直播狀態
-  live_start_time: string | null // 待機室的預定開始時間 (ISO timestamp)
+  live_video_id: string | null // YouTube 直播/待機室影片 ID
+  live_title: string | null // YouTube 直播/待機室標題
+  live_thumbnail: string | null // YouTube 直播/待機室縮圖
+  live_status: 'live' | 'upcoming' | 'none' | null // YouTube 直播狀態
+  live_start_time: string | null // YouTube 待機室的預定開始時間 (ISO timestamp)
+  // Twitch 直播狀態（獨立於 YouTube）
+  is_live_twitch: boolean | null
+  last_live_at_twitch: string | null // ISO timestamp
+  live_video_id_twitch: string | null // Twitch stream ID (通常為 null)
+  live_title_twitch: string | null // Twitch 直播標題
+  live_thumbnail_twitch: string | null // Twitch 直播縮圖
+  live_status_twitch: 'live' | 'upcoming' | 'none' | null // Twitch 直播狀態
+  live_start_time_twitch: string | null // Twitch 待機室的預定開始時間 (ISO timestamp)
+  twitch_user_id: string | null // Twitch User ID
 }
 
 export interface TranslateChannel {

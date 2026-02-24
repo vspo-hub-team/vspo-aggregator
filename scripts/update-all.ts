@@ -629,16 +629,16 @@ async function processMember(member: Member, idx: number, total: number, twitchT
   }
   console.log(`  💾 已處理 ${videosToInsert.length} 部成員影片 (新增: ${totalInserted}, 更新: ${totalUpdated})`)
 
-  // 6. 更新 members 表的直播狀態（整合 YouTube 和 Twitch）
-  // 優先級：YouTube live > YouTube upcoming > Twitch live > none
+  // 6. 更新 members 表的直播狀態（獨立更新 YouTube 和 Twitch，支援雙平台同時直播）
   
-  let finalLiveStatus: 'live' | 'upcoming' | 'none' = 'none'
-  let finalIsLive = false
-  let finalLiveVideoId: string | null = null
-  let finalLiveTitle: string | null = null
-  let finalLiveThumbnail: string | null = null
-  let finalLiveStartTime: string | null = null
-  let finalLastLiveAt: string | null = null
+  // ===== YouTube 直播狀態（獨立更新） =====
+  let youtubeLiveStatus: 'live' | 'upcoming' | 'none' = 'none'
+  let youtubeIsLive = false
+  let youtubeLiveVideoId: string | null = null
+  let youtubeLiveTitle: string | null = null
+  let youtubeLiveThumbnail: string | null = null
+  let youtubeLiveStartTime: string | null = null
+  let youtubeLastLiveAt: string | null = null
 
   // 檢查 YouTube 狀態
   if (liveV) {
@@ -647,77 +647,119 @@ async function processMember(member: Member, idx: number, total: number, twitchT
       : 0
     const concurrentViewers = concurrentViewersNum.toLocaleString()
     console.log(`  🔴 YouTube LIVE: ${liveV.snippet.title} (👁️ ${concurrentViewers} 人觀看)`)
-    finalLiveStatus = 'live'
-    finalIsLive = true
-    finalLiveVideoId = liveV.id
-    finalLiveTitle = liveV.snippet.title
-    finalLiveThumbnail = liveV.snippet.thumbnails.high.url
-    finalLastLiveAt = new Date().toISOString()
+    youtubeLiveStatus = 'live'
+    youtubeIsLive = true
+    youtubeLiveVideoId = liveV.id
+    youtubeLiveTitle = liveV.snippet.title
+    youtubeLiveThumbnail = liveV.snippet.thumbnails.high.url
+    youtubeLastLiveAt = new Date().toISOString()
   } else if (upcomingV) {
     console.log(`  ⏰ YouTube 待機: ${upcomingV.snippet.title}`)
-    finalLiveStatus = 'upcoming'
-    finalIsLive = false
-    finalLiveVideoId = upcomingV.id
-    finalLiveTitle = upcomingV.snippet.title
-    finalLiveThumbnail = upcomingV.snippet.thumbnails.high.url
-    finalLiveStartTime = upcomingV.liveStreamingDetails?.scheduledStartTime || null
+    youtubeLiveStatus = 'upcoming'
+    youtubeIsLive = false
+    youtubeLiveVideoId = upcomingV.id
+    youtubeLiveTitle = upcomingV.snippet.title
+    youtubeLiveThumbnail = upcomingV.snippet.thumbnails.high.url
+    youtubeLiveStartTime = upcomingV.liveStreamingDetails?.scheduledStartTime || null
   } else {
-    // YouTube 沒有直播，檢查 Twitch
-    // 自動獲取 Twitch User ID（如果 channel_id_twitch 有值但 twitch_user_id 為空）
-    let finalTwitchUserId = member.twitch_user_id
-    if (member.channel_id_twitch && !member.twitch_user_id && twitchToken) {
-      console.log(`  [Twitch] 🔍 自動補齊 User ID: ${member.channel_id_twitch}...`)
-      const newId = await getTwitchUserId(member.channel_id_twitch, twitchToken)
-      if (newId) {
-        // 更新資料庫
-        const { error: updateError } = await supabase
-          .from('members')
-          .update({ twitch_user_id: newId })
-          .eq('id', member.id)
-        
-        if (updateError) {
-          console.log(`  [Twitch] ❌ 更新 User ID 失敗: ${updateError.message}`)
-        } else {
-          console.log(`  [Twitch] ✅ 自動補齊 ID: ${member.channel_id_twitch} -> ${newId}`)
-          // 更新當前 member 物件和變數，讓程式可以繼續往下執行
-          finalTwitchUserId = newId
-          member.twitch_user_id = newId
-        }
-      } else {
-        console.log(`  [Twitch] ⚠️ 無法獲取 ${member.channel_id_twitch} 的 User ID，跳過 Twitch 檢查`)
-      }
-    }
-    
-    // 檢查 Twitch 直播狀態
-    if (hasTwitch && finalTwitchUserId && twitchToken) {
-      console.log(`  [Twitch] 正在查詢 ${member.name_jp} 的直播狀態 (user_id: ${finalTwitchUserId})...`)
-      const twitchStatus = await checkTwitchLive(finalTwitchUserId, twitchToken, member.name_jp)
-      if (twitchStatus?.isLive) {
-        const viewerCount = twitchStatus.viewerCount ? twitchStatus.viewerCount.toLocaleString() : '0'
-        console.log(`  🟣 [Twitch LIVE] 🎮 ${member.name_jp} 正在 Twitch 實況中！`)
-        console.log(`     標題: ${twitchStatus.title}`)
-        console.log(`     觀看人數: 👁️ ${viewerCount} 人`)
-        finalLiveStatus = 'live'
-        finalIsLive = true
-        finalLiveVideoId = null // Twitch 直播沒有 video_id
-        finalLiveTitle = twitchStatus.title
-        finalLiveThumbnail = twitchStatus.thumbnail
-        finalLastLiveAt = new Date().toISOString()
-      }
-    } else if (hasTwitch && !twitchToken) {
-      console.log(`  [Twitch] ⚠️ 無法查詢 ${member.name_jp} 的直播狀態：缺少 Access Token`)
-    }
+    // YouTube 沒有直播，重置為 none
+    youtubeLiveStatus = 'none'
+    youtubeIsLive = false
+    youtubeLiveVideoId = null
+    youtubeLiveTitle = null
+    youtubeLiveThumbnail = null
+    youtubeLiveStartTime = null
   }
 
-  // 更新資料庫
+  // ===== Twitch 直播狀態（獨立更新，與 YouTube 互不干擾） =====
+  let twitchLiveStatus: 'live' | 'upcoming' | 'none' = 'none'
+  let twitchIsLive = false
+  let twitchLiveVideoId: string | null = null
+  let twitchLiveTitle: string | null = null
+  let twitchLiveThumbnail: string | null = null
+  let twitchLiveStartTime: string | null = null
+  let twitchLastLiveAt: string | null = null
+
+  // 自動獲取 Twitch User ID（如果 channel_id_twitch 有值但 twitch_user_id 為空）
+  let finalTwitchUserId = member.twitch_user_id
+  if (member.channel_id_twitch && !member.twitch_user_id && twitchToken) {
+    console.log(`  [Twitch] 🔍 自動補齊 User ID: ${member.channel_id_twitch}...`)
+    const newId = await getTwitchUserId(member.channel_id_twitch, twitchToken)
+    if (newId) {
+      // 更新資料庫
+      const { error: updateError } = await supabase
+        .from('members')
+        .update({ twitch_user_id: newId })
+        .eq('id', member.id)
+      
+      if (updateError) {
+        console.log(`  [Twitch] ❌ 更新 User ID 失敗: ${updateError.message}`)
+      } else {
+        console.log(`  [Twitch] ✅ 自動補齊 ID: ${member.channel_id_twitch} -> ${newId}`)
+        // 更新當前 member 物件和變數，讓程式可以繼續往下執行
+        finalTwitchUserId = newId
+        member.twitch_user_id = newId
+      }
+    } else {
+      console.log(`  [Twitch] ⚠️ 無法獲取 ${member.channel_id_twitch} 的 User ID，跳過 Twitch 檢查`)
+    }
+  }
+  
+  // 檢查 Twitch 直播狀態（無論 YouTube 是否直播都會檢查）
+  if (hasTwitch && finalTwitchUserId && twitchToken) {
+    console.log(`  [Twitch] 正在查詢 ${member.name_jp} 的直播狀態 (user_id: ${finalTwitchUserId})...`)
+    const twitchStatus = await checkTwitchLive(finalTwitchUserId, twitchToken, member.name_jp)
+    if (twitchStatus?.isLive) {
+      const viewerCount = twitchStatus.viewerCount ? twitchStatus.viewerCount.toLocaleString() : '0'
+      console.log(`  🟣 [Twitch LIVE] 🎮 ${member.name_jp} 正在 Twitch 實況中！`)
+      console.log(`     標題: ${twitchStatus.title}`)
+      console.log(`     觀看人數: 👁️ ${viewerCount} 人`)
+      twitchLiveStatus = 'live'
+      twitchIsLive = true
+      twitchLiveVideoId = null // Twitch 直播沒有 video_id
+      twitchLiveTitle = twitchStatus.title
+      twitchLiveThumbnail = twitchStatus.thumbnail
+      twitchLastLiveAt = new Date().toISOString()
+    } else {
+      // Twitch 沒有直播，重置為 none
+      twitchLiveStatus = 'none'
+      twitchIsLive = false
+      twitchLiveVideoId = null
+      twitchLiveTitle = null
+      twitchLiveThumbnail = null
+      twitchLiveStartTime = null
+    }
+  } else if (hasTwitch && !twitchToken) {
+    console.log(`  [Twitch] ⚠️ 無法查詢 ${member.name_jp} 的直播狀態：缺少 Access Token`)
+    // 無法查詢時，保持現有狀態不變（不清空）
+  } else if (!hasTwitch) {
+    // 沒有 Twitch 頻道，重置為 none
+    twitchLiveStatus = 'none'
+    twitchIsLive = false
+    twitchLiveVideoId = null
+    twitchLiveTitle = null
+    twitchLiveThumbnail = null
+    twitchLiveStartTime = null
+  }
+
+  // 更新資料庫（同時更新 YouTube 和 Twitch 的直播狀態，互不干擾）
   await supabase.from('members').update({
-    live_status: finalLiveStatus,
-    is_live: finalIsLive,
-    live_video_id: finalLiveVideoId,
-    live_title: finalLiveTitle,
-    live_thumbnail: finalLiveThumbnail,
-    live_start_time: finalLiveStartTime,
-    last_live_at: finalLastLiveAt
+    // YouTube 直播狀態
+    live_status: youtubeLiveStatus,
+    is_live: youtubeIsLive,
+    live_video_id: youtubeLiveVideoId,
+    live_title: youtubeLiveTitle,
+    live_thumbnail: youtubeLiveThumbnail,
+    live_start_time: youtubeLiveStartTime,
+    last_live_at: youtubeLastLiveAt,
+    // Twitch 直播狀態（獨立欄位）
+    live_status_twitch: twitchLiveStatus,
+    is_live_twitch: twitchIsLive,
+    live_video_id_twitch: twitchLiveVideoId,
+    live_title_twitch: twitchLiveTitle,
+    live_thumbnail_twitch: twitchLiveThumbnail,
+    live_start_time_twitch: twitchLiveStartTime,
+    last_live_at_twitch: twitchLastLiveAt
   }).eq('id', member.id)
 
   // Twitch 存檔抓取（無論是否直播都抓取）
