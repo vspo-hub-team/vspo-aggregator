@@ -87,6 +87,7 @@ export interface Video {
   duration_sec: number | null
   created_at: string | null // ISO timestamp
   updated_at: string | null // ISO timestamp
+  related_stream_id: string | null // UUID reference to streams (同場直播關聯)
   members?: Member | null // 關聯的成員資料
   clipper?: Clipper | null // 關聯的烤肉頻道資料
 }

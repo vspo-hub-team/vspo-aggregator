@@ -263,6 +263,7 @@ function extractSourceVideoId(description: string | null | undefined): string | 
 /**
  * 根據 YouTube Video ID 查找對應的 stream UUID
  * 先在 streams 表中查找，如果找不到則嘗試在 videos 表中查找並自動創建 stream 記錄
+ * 如果都找不到，則創建一個空殼 stream（Skeleton Stream）以實現群組化
  */
 async function findStreamIdByVideoId(videoId: string): Promise<string | null> {
   // 1. 先在 streams 表中查找
@@ -276,40 +277,90 @@ async function findStreamIdByVideoId(videoId: string): Promise<string | null> {
     return streamData.id
   }
   
-  // 2. 如果 streams 表中找不到，在 videos 表中查找（只查找有 member_id 的，即官方直播存檔）
+  // 2. 如果 streams 表中找不到，在 videos 表中查找（嘗試獲取更多資訊）
   // 注意：videos 表的 id 就是 YouTube Video ID
   const { data: videoData } = await supabase
     .from('videos')
     .select('id, member_id, title, published_at, platform')
     .eq('id', videoId)
-    .not('member_id', 'is', null)
     .in('video_type', ['live', 'archive'])
     .maybeSingle()
   
-  if (videoData?.id && videoData.member_id) {
-    // 如果找到對應的 video，自動在 streams 表中創建對應的記錄
-    console.log(`  🔧 [滴血認親] 在 videos 表中找到對應記錄，自動創建 stream 記錄...`)
-    const { data: newStreamData, error: streamCreateError } = await supabase
-      .from('streams')
-      .insert({
-        video_id: videoId,
-        platform: (videoData.platform as any) || 'youtube',
-        title: videoData.title || null,
-        published_at: videoData.published_at || null,
-        member_id: videoData.member_id
-      })
-      .select('id')
-      .single()
-    
-    if (streamCreateError) {
-      console.warn(`  ⚠️ [滴血認親] 創建 stream 記錄失敗: ${streamCreateError.message}`)
-      return null
+  if (videoData?.id) {
+    if (videoData.member_id) {
+      // 如果找到對應的 video 且有 member_id，自動在 streams 表中創建完整的記錄
+      console.log(`  🔧 [滴血認親] 在 videos 表中找到對應記錄，自動創建 stream 記錄...`)
+      const { data: newStreamData, error: streamCreateError } = await supabase
+        .from('streams')
+        .insert({
+          video_id: videoId,
+          platform: (videoData.platform as any) || 'youtube',
+          title: videoData.title || null,
+          published_at: videoData.published_at || null,
+          member_id: videoData.member_id
+        })
+        .select('id')
+        .single()
+      
+      if (streamCreateError) {
+        console.warn(`  ⚠️ [滴血認親] 創建 stream 記錄失敗: ${streamCreateError.message}`)
+        return null
+      }
+      
+      if (newStreamData?.id) {
+        console.log(`  ✅ [滴血認親] 成功創建 stream 記錄: ${newStreamData.id}`)
+        return newStreamData.id
+      }
+    } else {
+      // 如果找到 video 但沒有 member_id，創建空殼 stream（使用 video 表中的 platform 資訊）
+      console.log(`  🔧 [滴血認親] 在 videos 表中找到記錄但無 member_id，創建空殼 stream...`)
+      const { data: newStreamData, error: streamCreateError } = await supabase
+        .from('streams')
+        .insert({
+          video_id: videoId,
+          platform: (videoData.platform as any) || 'youtube',
+          title: videoData.title || null,
+          published_at: videoData.published_at || null,
+          member_id: null
+        })
+        .select('id')
+        .single()
+      
+      if (streamCreateError) {
+        console.warn(`  ⚠️ [滴血認親] 創建空殼 stream 失敗: ${streamCreateError.message}`)
+        return null
+      }
+      
+      if (newStreamData?.id) {
+        console.log(`  ✅ [滴血認親] 成功創建空殼 stream: ${newStreamData.id}`)
+        return newStreamData.id
+      }
     }
-    
-    if (newStreamData?.id) {
-      console.log(`  ✅ [滴血認親] 成功創建 stream 記錄: ${newStreamData.id}`)
-      return newStreamData.id
-    }
+  }
+  
+  // 3. 如果 streams 和 videos 表中都找不到，創建一個空殼 stream（Skeleton Stream）
+  // 這樣可以讓同一個 source_video_id 的精華影片獲得相同的 related_stream_id，實現群組化
+  console.log(`  🔧 [滴血認親] 找不到任何記錄，創建空殼 stream (video_id: ${videoId})...`)
+  const { data: skeletonStreamData, error: skeletonStreamError } = await supabase
+    .from('streams')
+    .insert({
+      video_id: videoId,
+      platform: 'youtube', // 預設為 youtube（大部分精華來自 YouTube）
+      title: null,
+      published_at: null,
+      member_id: null
+    })
+    .select('id')
+    .single()
+  
+  if (skeletonStreamError) {
+    console.warn(`  ⚠️ [滴血認親] 創建空殼 stream 失敗: ${skeletonStreamError.message}`)
+    return null
+  }
+  
+  if (skeletonStreamData?.id) {
+    console.log(`  ✅ [滴血認親] 成功創建空殼 stream: ${skeletonStreamData.id}`)
+    return skeletonStreamData.id
   }
   
   return null
@@ -1029,18 +1080,19 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
   const existingIds = new Set(existingVideos?.map(v => v.id) || [])
   const newVideoIds = allVideoIds.filter(id => !existingIds.has(id))
   
-  // 檢查已存在影片中，哪些 clips 表的 related_stream_id 為 null（需要更新）
+  // 檢查已存在影片中，哪些 videos 表的 related_stream_id 為 null（需要更新）
   const existingVideoIdsForUpdate: string[] = []
   if (existingIds.size > 0) {
-    const { data: clipsWithoutStream } = await supabase
-      .from('clips')
-      .select('video_id')
-      .in('video_id', Array.from(existingIds))
+    const { data: videosWithoutStream } = await supabase
+      .from('videos')
+      .select('id')
+      .in('id', Array.from(existingIds))
       .is('related_stream_id', null)
+      .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
       .limit(100) // 限制數量，避免一次處理太多
     
-    if (clipsWithoutStream) {
-      existingVideoIdsForUpdate.push(...clipsWithoutStream.map(c => c.video_id))
+    if (videosWithoutStream) {
+      existingVideoIdsForUpdate.push(...videosWithoutStream.map(v => v.id))
       if (existingVideoIdsForUpdate.length > 0) {
         console.log(`  🔄 發現 ${existingVideoIdsForUpdate.length} 部已存在影片的 related_stream_id 為 null，將嘗試更新`)
       }
@@ -1197,15 +1249,15 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
           if (streamId) {
             console.log(`  ✅ [滴血認親] 找到對應的 stream UUID: ${streamId}`)
             
-            // 更新 clips 表的 related_stream_id
-            // 注意：clips 表的 video_id 就是 YouTube Video ID
-            const { error: clipUpdateError } = await supabase
-              .from('clips')
+            // 更新 videos 表的 related_stream_id
+            // 注意：videos 表的 id 就是 YouTube Video ID（不是 UUID）
+            const { error: videoUpdateError } = await supabase
+              .from('videos')
               .update({ related_stream_id: streamId })
-              .eq('video_id', apiVideo.id)
+              .eq('id', apiVideo.id)
             
-            if (clipUpdateError) {
-              console.warn(`  ⚠️ [滴血認親] 更新 clips 表失敗: ${clipUpdateError.message}`)
+            if (videoUpdateError) {
+              console.warn(`  ⚠️ [滴血認親] 更新 videos 表失敗: ${videoUpdateError.message}`)
             } else {
               console.log(`  🎉 [滴血認親] 成功綁定 related_stream_id = ${streamId}`)
             }
@@ -1213,16 +1265,16 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
             console.log(`  ⚠️ [滴血認親] 找不到對應的 stream UUID (video_id: ${sourceVideoId})`)
           }
         } else {
-          // 如果沒有從 description 提取到，嘗試檢查 clips 表是否已有記錄
+          // 如果沒有從 description 提取到，嘗試檢查 videos 表是否已有記錄
           // 如果已有記錄但 related_stream_id 為 null，可以嘗試其他方法
-          const { data: existingClip } = await supabase
-            .from('clips')
+          const { data: existingVideo } = await supabase
+            .from('videos')
             .select('related_stream_id')
-            .eq('video_id', apiVideo.id)
+            .eq('id', apiVideo.id)
             .maybeSingle()
           
-          if (existingClip && !existingClip.related_stream_id) {
-            console.log(`  💡 [滴血認親] clips 表中已有記錄但 related_stream_id 為 null，description 中未找到原直播連結`)
+          if (existingVideo && !existingVideo.related_stream_id) {
+            console.log(`  💡 [滴血認親] videos 表中已有記錄但 related_stream_id 為 null，description 中未找到原直播連結`)
           }
         }
         
