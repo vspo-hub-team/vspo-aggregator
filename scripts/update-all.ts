@@ -216,6 +216,105 @@ function extractVideoId(url: string): string {
   return match ? match[1] : url
 }
 
+/**
+ * 從 description 中提取原直播的 YouTube Video ID
+ * 優先掃描包含特定關鍵字的區域附近的網址
+ */
+function extractSourceVideoId(description: string | null | undefined): string | null {
+  if (!description) return null
+  
+  // 關鍵字列表（用於優先匹配）
+  const keywords = ['元動画', '原影片', '元配信', '本編', 'Source', 'Archive', '元配', '元動', '本編動画', '元配信動画']
+  
+  // 先嘗試在關鍵字附近尋找
+  for (const keyword of keywords) {
+    // 在關鍵字前後各 200 字元範圍內尋找 YouTube 網址
+    const keywordIndex = description.indexOf(keyword)
+    if (keywordIndex !== -1) {
+      const start = Math.max(0, keywordIndex - 200)
+      const end = Math.min(description.length, keywordIndex + keyword.length + 200)
+      const context = description.substring(start, end)
+      
+      // 在上下文中尋找 YouTube 網址
+      const matches = context.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/g)
+      if (matches && matches.length > 0) {
+        // 提取第一個匹配的 Video ID
+        const videoIdMatch = matches[0].match(/([a-zA-Z0-9_-]{11})/)
+        if (videoIdMatch && videoIdMatch[1]) {
+          return videoIdMatch[1]
+        }
+      }
+    }
+  }
+  
+  // 如果關鍵字附近沒找到，則在整個 description 中尋找
+  const allMatches = description.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/g)
+  if (allMatches && allMatches.length > 0) {
+    // 提取第一個匹配的 Video ID
+    const videoIdMatch = allMatches[0].match(/([a-zA-Z0-9_-]{11})/)
+    if (videoIdMatch && videoIdMatch[1]) {
+      return videoIdMatch[1]
+    }
+  }
+  
+  return null
+}
+
+/**
+ * 根據 YouTube Video ID 查找對應的 stream UUID
+ * 先在 streams 表中查找，如果找不到則嘗試在 videos 表中查找並自動創建 stream 記錄
+ */
+async function findStreamIdByVideoId(videoId: string): Promise<string | null> {
+  // 1. 先在 streams 表中查找
+  const { data: streamData } = await supabase
+    .from('streams')
+    .select('id')
+    .eq('video_id', videoId)
+    .maybeSingle()
+  
+  if (streamData?.id) {
+    return streamData.id
+  }
+  
+  // 2. 如果 streams 表中找不到，在 videos 表中查找（只查找有 member_id 的，即官方直播存檔）
+  // 注意：videos 表的 id 就是 YouTube Video ID
+  const { data: videoData } = await supabase
+    .from('videos')
+    .select('id, member_id, title, published_at, platform')
+    .eq('id', videoId)
+    .not('member_id', 'is', null)
+    .in('video_type', ['live', 'archive'])
+    .maybeSingle()
+  
+  if (videoData?.id && videoData.member_id) {
+    // 如果找到對應的 video，自動在 streams 表中創建對應的記錄
+    console.log(`  🔧 [滴血認親] 在 videos 表中找到對應記錄，自動創建 stream 記錄...`)
+    const { data: newStreamData, error: streamCreateError } = await supabase
+      .from('streams')
+      .insert({
+        video_id: videoId,
+        platform: (videoData.platform as any) || 'youtube',
+        title: videoData.title || null,
+        published_at: videoData.published_at || null,
+        member_id: videoData.member_id
+      })
+      .select('id')
+      .single()
+    
+    if (streamCreateError) {
+      console.warn(`  ⚠️ [滴血認親] 創建 stream 記錄失敗: ${streamCreateError.message}`)
+      return null
+    }
+    
+    if (newStreamData?.id) {
+      console.log(`  ✅ [滴血認親] 成功創建 stream 記錄: ${newStreamData.id}`)
+      return newStreamData.id
+    }
+  }
+  
+  return null
+}
+
 function parseDuration(duration: string): number | null {
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
   if (!match) return null
@@ -929,20 +1028,41 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
   
   const existingIds = new Set(existingVideos?.map(v => v.id) || [])
   const newVideoIds = allVideoIds.filter(id => !existingIds.has(id))
+  
+  // 檢查已存在影片中，哪些 clips 表的 related_stream_id 為 null（需要更新）
+  const existingVideoIdsForUpdate: string[] = []
+  if (existingIds.size > 0) {
+    const { data: clipsWithoutStream } = await supabase
+      .from('clips')
+      .select('video_id')
+      .in('video_id', Array.from(existingIds))
+      .is('related_stream_id', null)
+      .limit(100) // 限制數量，避免一次處理太多
+    
+    if (clipsWithoutStream) {
+      existingVideoIdsForUpdate.push(...clipsWithoutStream.map(c => c.video_id))
+      if (existingVideoIdsForUpdate.length > 0) {
+        console.log(`  🔄 發現 ${existingVideoIdsForUpdate.length} 部已存在影片的 related_stream_id 為 null，將嘗試更新`)
+      }
+    }
+  }
 
-  if (newVideoIds.length === 0) {
-    console.log(`  ✅ 沒有新影片`)
+  if (newVideoIds.length === 0 && existingVideoIdsForUpdate.length === 0) {
+    console.log(`  ✅ 沒有新影片，且沒有需要更新 related_stream_id 的影片`)
     return
   }
 
-  console.log(`  📋 RSS 找到 ${allVideoIds.length} 部影片，其中 ${newVideoIds.length} 部是新影片`)
+  console.log(`  📋 RSS 找到 ${allVideoIds.length} 部影片，其中 ${newVideoIds.length} 部是新影片，${existingVideoIdsForUpdate.length} 部需要更新 related_stream_id`)
 
-  // 5. 將新影片 ID 每 50 個切成一個批次，呼叫 YouTube API 取得統計資料
+  // 5. 合併新影片和需要更新的已存在影片，統一處理
+  const allVideoIdsToProcess = Array.from(new Set([...newVideoIds, ...existingVideoIdsForUpdate]))
+  
+  // 6. 將所有需要處理的影片 ID 每 50 個切成一個批次，呼叫 YouTube API 取得統計資料
   const BATCH_SIZE = 50
   let totalSaved = 0
   
-  for (let i = 0; i < newVideoIds.length; i += BATCH_SIZE) {
-    const batchIds = newVideoIds.slice(i, i + BATCH_SIZE)
+  for (let i = 0; i < allVideoIdsToProcess.length; i += BATCH_SIZE) {
+    const batchIds = allVideoIdsToProcess.slice(i, i + BATCH_SIZE)
     const batchNumber = Math.floor(i / BATCH_SIZE) + 1
     const totalBatches = Math.ceil(newVideoIds.length / BATCH_SIZE)
     
@@ -1025,11 +1145,16 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
         const title = apiVideo.snippet?.title || rssData?.title || '無標題'
         const description = apiVideo.snippet?.description || null
         
-        // 安全過濾：檢查是否符合 VSPO 相關
-        const isRelated = await isVSPORelated(title, description, memberNames)
-        if (!isRelated) {
-          console.log(`  [Skip] 非 VSPO 影片: ${title}`)
-          continue
+        // 判斷是否為新影片還是已存在的影片
+        const isNewVideo = newVideoIds.includes(apiVideo.id)
+        
+        // 安全過濾：檢查是否符合 VSPO 相關（只對新影片進行過濾）
+        if (isNewVideo) {
+          const isRelated = await isVSPORelated(title, description, memberNames)
+          if (!isRelated) {
+            console.log(`  [Skip] 非 VSPO 影片: ${title}`)
+            continue
+          }
         }
         
         // 優先使用 API 的發布時間，如果沒有則使用 RSS 的發布時間
@@ -1042,6 +1167,11 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
           }
         }
         
+        // 判斷是否為 Shorts（時長 <= 60 秒）
+        const isShorts = durationSec !== null && durationSec <= 60
+        const videoType = isShorts ? 'short' : 'video'
+        
+        // 寫入或更新 videos 表（新影片和已存在影片都更新）
         await supabase.from('videos').upsert({
           id: apiVideo.id,
           clipper_id: clipper.id,
@@ -1051,11 +1181,54 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
           thumbnail_url: thumbnailUrl,
           published_at: publishedAt,
           view_count: viewCount,
-          video_type: 'video',
+          video_type: videoType,
           duration_sec: durationSec,
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' })
-        totalSaved++
+        
+        // ===== 自動綁定原直播 (滴血認親) =====
+        // 從 description 中提取原直播的 YouTube Video ID
+        const sourceVideoId = extractSourceVideoId(description)
+        if (sourceVideoId) {
+          console.log(`  🔗 [滴血認親] 從 description 提取到原直播 ID: ${sourceVideoId} (${isNewVideo ? '新影片' : '已存在影片'})`)
+          
+          // 查找對應的 stream UUID
+          const streamId = await findStreamIdByVideoId(sourceVideoId)
+          if (streamId) {
+            console.log(`  ✅ [滴血認親] 找到對應的 stream UUID: ${streamId}`)
+            
+            // 更新 clips 表的 related_stream_id
+            // 注意：clips 表的 video_id 就是 YouTube Video ID
+            const { error: clipUpdateError } = await supabase
+              .from('clips')
+              .update({ related_stream_id: streamId })
+              .eq('video_id', apiVideo.id)
+            
+            if (clipUpdateError) {
+              console.warn(`  ⚠️ [滴血認親] 更新 clips 表失敗: ${clipUpdateError.message}`)
+            } else {
+              console.log(`  🎉 [滴血認親] 成功綁定 related_stream_id = ${streamId}`)
+            }
+          } else {
+            console.log(`  ⚠️ [滴血認親] 找不到對應的 stream UUID (video_id: ${sourceVideoId})`)
+          }
+        } else {
+          // 如果沒有從 description 提取到，嘗試檢查 clips 表是否已有記錄
+          // 如果已有記錄但 related_stream_id 為 null，可以嘗試其他方法
+          const { data: existingClip } = await supabase
+            .from('clips')
+            .select('related_stream_id')
+            .eq('video_id', apiVideo.id)
+            .maybeSingle()
+          
+          if (existingClip && !existingClip.related_stream_id) {
+            console.log(`  💡 [滴血認親] clips 表中已有記錄但 related_stream_id 為 null，description 中未找到原直播連結`)
+          }
+        }
+        
+        if (isNewVideo) {
+          totalSaved++
+        }
       }
 
       // 處理 API 沒回傳的影片（可能已被刪除或設為私人）
@@ -1073,6 +1246,7 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
             continue
           }
           
+          // RSS 資料沒有 description，無法進行滴血認親
           await supabase.from('videos').upsert({
             id: videoId,
             clipper_id: clipper.id,
