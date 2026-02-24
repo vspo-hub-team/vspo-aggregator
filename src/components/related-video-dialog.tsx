@@ -126,42 +126,18 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
         else if (video.clipper_id) {
           console.log('Step 1 (情況2): 尋找當前精華的 related_stream_id...', currentVideoId)
           
-          // 1. 在 clips 表中找到當前精華的記錄
-          // 注意：clips 表的 video_id 是 TEXT，但也要嘗試 id 欄位（如果 id 就是 YouTube ID）
-          let currentClip = null
-          let currentClipError = null
-          
-          // 先嘗試用 video_id 查詢
-          const { data: clipByVideoId, error: errorByVideoId } = await supabase
+          // 1. 在 clips 表中找到當前精華的記錄（通過 video_id 比對）
+          // 注意：clips 表的 id 是 UUID，絕對不能用 YouTube Video ID 去查詢 id 欄位！
+          const { data: currentClip, error: currentClipError } = await supabase
             .from('clips')
             .select('id, video_id, related_stream_id')
-            .eq('video_id', currentVideoId)
+            .eq('video_id', currentVideoId) // video_id 是 TEXT，安全比對
             .maybeSingle()
-          
-          if (clipByVideoId) {
-            currentClip = clipByVideoId
-            console.log('Step 1 (情況2) 成功: 通過 video_id 找到記錄', currentClip)
-          } else if (errorByVideoId) {
-            console.warn('Step 1 (情況2) 錯誤: 通過 video_id 查詢失敗', errorByVideoId)
-            currentClipError = errorByVideoId
+
+          if (currentClipError) {
+            console.warn('Step 1 (情況2) 錯誤: 查詢 clips 表失敗', currentClipError)
           } else {
-            // 如果 video_id 查不到，嘗試用 id 查詢（如果 id 就是 YouTube ID）
-            console.log('Step 1 (情況2) 嘗試: video_id 查不到，嘗試用 id 查詢...', currentVideoId)
-            const { data: clipById, error: errorById } = await supabase
-              .from('clips')
-              .select('id, video_id, related_stream_id')
-              .eq('id', currentVideoId)
-              .maybeSingle()
-            
-            if (clipById) {
-              currentClip = clipById
-              console.log('Step 1 (情況2) 成功: 通過 id 找到記錄', currentClip)
-            } else if (errorById) {
-              console.warn('Step 1 (情況2) 錯誤: 通過 id 查詢失敗', errorById)
-              currentClipError = errorById
-            } else {
-              console.log('Step 1 (情況2) 警告: clips 表中找不到 video_id =', currentVideoId, '或 id =', currentVideoId, '的記錄')
-            }
+            console.log('Step 1 (情況2) 結果: currentClip =', currentClip)
           }
 
           if (currentClip?.related_stream_id) {
@@ -236,46 +212,53 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
         console.warn('第一順位（同場直播）查詢失敗:', error)
       }
 
-      // ===== 第二順位：同成員推薦（Fallback） =====
-      // 確保 member_id 確實有值（可能被關聯展開為 member?.id）
+      // ===== 第二順位：同成員或同頻道推薦（Fallback） =====
+      // 確保 member_id 或 clipper_id 確實有值（可能被關聯展開）
       const actualMemberId = video.member_id || (video as any).member?.id
+      const actualClipperId = video.clipper_id || (video as any).clipper?.id
       console.log('Actual Member ID:', actualMemberId, 'from video.member_id:', video.member_id, 'from video.member?.id:', (video as any).member?.id)
+      console.log('Actual Clipper ID:', actualClipperId, 'from video.clipper_id:', video.clipper_id, 'from video.clipper?.id:', (video as any).clipper?.id)
       
-      // 防呆：如果 member_id 為 null 或 undefined，跳過查詢
-      if (results.length < 3 && actualMemberId) {
+      // 決定查詢的目標欄位與 ID（優先使用 member_id，如果沒有則使用 clipper_id）
+      const targetColumn = actualMemberId ? 'member_id' : (actualClipperId ? 'clipper_id' : null)
+      const targetId = actualMemberId || actualClipperId
+      const targetType = actualMemberId ? '同成員' : (actualClipperId ? '同頻道' : null)
+      
+      // 防呆：如果兩個 ID 都為 null 或 undefined，跳過查詢
+      if (results.length < 3 && targetColumn && targetId) {
         try {
-          console.log('第二順位: 開始查詢同成員精華，member_id =', actualMemberId)
-          // 只查詢基礎欄位，只使用 UUID 比對（member_id 確定是 UUID）
+          console.log(`第二順位: 開始查詢${targetType}精華，${targetColumn} =`, targetId)
+          // 只查詢基礎欄位
           // 注意：videos 表中 video_type 的值可能是 'video' 或 'short'（小寫），使用不區分大小寫的查詢
           // 使用 .or() 來匹配所有可能的 video_type 值（排除 live/archive/upcoming）
           const { data: videosData, error } = await supabase
             .from('videos')
             .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
-            .eq('member_id', actualMemberId) // 同成員（member_id 是 UUID，絕對安全）
+            .eq(targetColumn, targetId) // 動態使用 member_id 或 clipper_id
             .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
             // 排除直播、存檔、待機室（使用 .or() 來匹配所有可能的 video_type 值）
             .or('video_type.eq.video,video_type.eq.Video,video_type.eq.VIDEO,video_type.eq.short,video_type.eq.Short,video_type.eq.SHORT,video_type.eq.clip,video_type.eq.Clip,video_type.eq.CLIP')
             .order('published_at', { ascending: false })
-            .limit(12) // 多取一些，以便前端過濾後仍有足夠數量
+            .limit(15) // 多取一些，以便前端過濾後仍有足夠數量
           
           if (error) {
             console.warn('第二順位查詢錯誤:', error)
           } else {
-            console.log('第二順位（同成員）找到的影片:', videosData?.length || 0)
+            console.log(`第二順位（${targetType}）找到的影片:`, videosData?.length || 0)
             if (videosData && videosData.length > 0) {
               console.log('第二順位影片詳情:', videosData.map(v => ({ id: v.id, title: v.title, video_type: v.video_type, clipper_id: v.clipper_id })))
             } else {
               console.log('第二順位警告: 查詢成功但沒有找到任何影片。可能原因：')
-              console.log('  - member_id 不匹配')
+              console.log(`  - ${targetColumn} 不匹配`)
               console.log('  - 所有影片的 clipper_id 都是 null')
               console.log('  - 所有影片的 video_type 都是 live/archive/upcoming 或其他未匹配的值')
               console.log('  - 嘗試查詢所有 video_type 值來診斷...')
               
-              // 診斷查詢：查看該 member_id 的所有影片類型
+              // 診斷查詢：查看該 ID 的所有影片類型
               const { data: diagnosticData } = await supabase
                 .from('videos')
                 .select('video_type, clipper_id')
-                .eq('member_id', actualMemberId)
+                .eq(targetColumn, targetId)
                 .limit(20)
               
               if (diagnosticData && diagnosticData.length > 0) {
@@ -291,7 +274,7 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
                 }, {})
                 console.log('clipper_id 分布:', clipperCounts)
               } else {
-                console.log('診斷結果: 該 member_id 沒有任何影片')
+                console.log(`診斷結果: 該 ${targetColumn} 沒有任何影片`)
               }
             }
           }
