@@ -277,16 +277,6 @@ function LiveMemberItem({
                  title="準備中..." />
           )}
           
-          {/* 平台標識（如果雙平台同時直播，顯示小圖示） */}
-          {platform === 'twitch' && (
-            <div className="absolute -top-1 -left-1 w-3 h-3 bg-purple-500 rounded-full border border-white z-10" 
-                 title="Twitch" />
-          )}
-          {platform === 'youtube' && (
-            <div className="absolute -top-1 -left-1 w-3 h-3 bg-red-500 rounded-full border border-white z-10" 
-                 title="YouTube" />
-          )}
-          
           {/* 優先使用 member.avatar_url，如果為空或載入失敗才顯示電視機佔位符 */}
           {member.avatar_url && !imageError ? (
             <img

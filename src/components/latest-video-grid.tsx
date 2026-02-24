@@ -126,10 +126,11 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
   const buildQuery = (pageParam: number = 0) => {
     // 根據 MainTab 決定 select 語句（使用 !inner 強制關聯）
     // 明確包含 member_id 字段，確保不會因為關聯展開而丟失
+    // 注意：只包含資料庫中確實存在的欄位，避免 400 錯誤
     const selectClause = 
       mainTab === 'jp_clips' || mainTab === 'cn_clips'
-        ? 'id, video_id, channel_id, member_id, clipper_id, platform, title, thumbnail_url, published_at, view_count, concurrent_viewers, video_type, duration_sec, created_at, updated_at, member:members(*), clipper:clippers!inner(*)'
-        : 'id, video_id, channel_id, member_id, clipper_id, platform, title, thumbnail_url, published_at, view_count, concurrent_viewers, video_type, duration_sec, created_at, updated_at, member:members(*), clipper:clippers(*)'
+        ? 'id, video_id, member_id, clipper_id, platform, title, thumbnail_url, published_at, view_count, video_type, duration_sec, created_at, updated_at, member:members(*), clipper:clippers!inner(*)'
+        : 'id, video_id, member_id, clipper_id, platform, title, thumbnail_url, published_at, view_count, video_type, duration_sec, created_at, updated_at, member:members(*), clipper:clippers(*)'
 
     let query = supabase
       .from('videos')
@@ -165,30 +166,15 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
       const selectedMemberData = members.find(m => m.id === memberFilter)
       
       if (mainTab === 'archives') {
-        // Archives 模式：只使用頻道 ID 過濾（官方頻道）
+        // Archives 模式：直接使用 member_id 過濾（官方頻道）
         // 絕對不要加入標題過濾，因為官方直播標題通常不會包含自己的名字
-        const memberChannelIds: string[] = []
-        
+        // 注意：videos 表中沒有 channel_id 欄位，應該使用 member_id 來過濾
         if (selectedMemberData) {
-          // 使用成員的官方頻道 ID
-          if (selectedMemberData.channel_id_yt) {
-            memberChannelIds.push(selectedMemberData.channel_id_yt)
-          }
-          if (selectedMemberData.channel_id_twitch) {
-            memberChannelIds.push(selectedMemberData.channel_id_twitch)
-          }
-        } else if (channelIds && channelIds.length > 0) {
-          // 如果提供了 channelIds（例如從個人頁面傳入），使用它
-          memberChannelIds.push(...channelIds)
-        }
-        
-        // 嚴格檢查：只有在陣列不為空時才使用 .in()
-        if (memberChannelIds && memberChannelIds.length > 0) {
-          // 過濾掉 null 或 undefined 的值
-          const validChannelIds = memberChannelIds.filter(id => id != null && id !== '')
-          if (validChannelIds.length > 0) {
-            query = query.in('channel_id', validChannelIds)
-          }
+          // 直接使用 member_id 過濾
+          query = query.eq('member_id', selectedMemberData.id)
+        } else if (memberFilter) {
+          // 如果只提供了 memberFilter（UUID），直接使用
+          query = query.eq('member_id', memberFilter)
         }
       } else if (mainTab === 'jp_clips' || mainTab === 'cn_clips') {
         // Clips 模式：只使用標題和暱稱過濾
