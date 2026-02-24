@@ -82,11 +82,14 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
               if (clipVideoIds.length > 0) {
                 console.log('Step 3: 在 videos 表中查找這些精華影片 (使用 id 欄位)...', clipVideoIds)
                 // 使用 id 欄位進行比對（videos.id 就是 YouTube Video ID）
+                // 注意：必須包含所有精華類型（長精華和短影音），無視大小寫
                 const { data: videosData, error: videosError } = await supabase
                   .from('videos')
                   .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
                   .in('id', clipVideoIds) // 使用 id 欄位比對（videos.id 就是 YouTube Video ID）
-                  .not('clipper_id', 'is', null) // 只取精華
+                  .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
+                  // 包含所有精華類型：video, short, clip（無視大小寫）
+                  .or('video_type.eq.video,video_type.eq.Video,video_type.eq.VIDEO,video_type.eq.short,video_type.eq.Short,video_type.eq.SHORT,video_type.eq.clip,video_type.eq.Clip,video_type.eq.CLIP')
                   .order('published_at', { ascending: false })
                   .limit(20)
                 
@@ -168,11 +171,14 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
               if (clipVideoIds.length > 0) {
                 console.log('Step 3 (情況2): 在 videos 表中查找這些精華影片 (使用 id 欄位)...', clipVideoIds)
                 // 使用 id 欄位進行比對（videos.id 就是 YouTube Video ID）
+                // 注意：必須包含所有精華類型（長精華和短影音），無視大小寫
                 const { data: videosData, error: videosError } = await supabase
                   .from('videos')
                   .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
                   .in('id', clipVideoIds) // 使用 id 欄位比對（videos.id 就是 YouTube Video ID）
-                  .not('clipper_id', 'is', null) // 只取精華
+                  .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
+                  // 包含所有精華類型：video, short, clip（無視大小寫）
+                  .or('video_type.eq.video,video_type.eq.Video,video_type.eq.VIDEO,video_type.eq.short,video_type.eq.Short,video_type.eq.SHORT,video_type.eq.clip,video_type.eq.Clip,video_type.eq.CLIP')
                   .order('published_at', { ascending: false })
                   .limit(20)
                 

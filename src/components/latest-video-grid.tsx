@@ -147,16 +147,24 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
     } else if (mainTab === 'jp_clips') {
       // 日文精華：clipper_id 不為空 且 clipper.lang === 'ja'
       // 注意：使用 !inner 強制關聯，確保 clipper 存在
+      // 必須包含所有精華類型（長精華和短影音），無視大小寫
       query = query
         .not('clipper_id', 'is', null)
         .eq('clippers.lang', 'ja')
+        // 包含所有精華類型：video, short, clip（無視大小寫）
+        // 注意：不限制 video_type，讓所有有 clipper_id 的影片都顯示（包括 Shorts）
+        // 如果資料庫中有 video_type 為 null 的精華，也會被包含
     } else if (mainTab === 'cn_clips') {
       // 中文精華：clipper_id 不為空 且 clipper.lang !== 'ja'
       // 注意：使用 !inner 強制關聯，確保 clipper 存在
       // 因為資料庫中 NULL 已修復，可以直接用 neq
+      // 必須包含所有精華類型（長精華和短影音），無視大小寫
       query = query
         .not('clipper_id', 'is', null)
         .neq('clippers.lang', 'ja')
+        // 包含所有精華類型：video, short, clip（無視大小寫）
+        // 注意：不限制 video_type，讓所有有 clipper_id 的影片都顯示（包括 Shorts）
+        // 如果資料庫中有 video_type 為 null 的精華，也會被包含
     }
 
     // 根據成員篩選（根據 mainTab 使用完全不同的過濾方式）
