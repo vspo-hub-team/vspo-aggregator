@@ -39,44 +39,61 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
 
         // 情況 1：如果點擊的是直播/存檔 (live/archive)
         if (video.video_type === 'live' || video.video_type === 'archive') {
+          console.log('Step 1: 開始尋找原直播 ID...', currentVideoId)
+          
           // 1. 在 streams 表中找到對應的 stream（通過 video_id 比對，TEXT 型別）
-          const { data: streamData } = await supabase
+          const { data: streamData, error: streamError } = await supabase
             .from('streams')
             .select('id')
             .eq('video_id', currentVideoId) // video_id 是 TEXT，安全比對
             .maybeSingle()
 
+          if (streamError) {
+            console.warn('Step 1 錯誤: 查詢 streams 表失敗', streamError)
+          } else {
+            console.log('Step 1 結果: streamData =', streamData)
+          }
+
           if (streamData?.id) {
             const streamId = streamData.id // UUID
+            console.log('Step 1 成功: 找到 streamId =', streamId)
 
             // 2. 在 clips 表中找到所有 related_stream_id === streamId 的精華
-            const { data: clipsData } = await supabase
+            console.log('Step 2: 尋找同場精華 IDs (related_stream_id =', streamId, ')...')
+            const { data: clipsData, error: clipsError } = await supabase
               .from('clips')
               .select('video_id')
               .eq('related_stream_id', streamId) // UUID 比對，安全
               .order('published_at', { ascending: false })
               .limit(20)
 
+            if (clipsError) {
+              console.warn('Step 2 錯誤: 查詢 clips 表失敗', clipsError)
+            } else {
+              console.log('Step 2 結果: clipsData =', clipsData, '數量:', clipsData?.length || 0)
+            }
+
             if (clipsData && clipsData.length > 0) {
               const clipVideoIds = clipsData.map(c => c.video_id).filter(Boolean)
+              console.log('Step 2 成功: 找到精華 Video IDs =', clipVideoIds)
 
               // 3. 通過 clips.video_id 去 videos 表找對應的影片資料
-              // 注意：videos.id 是 UUID，videos.video_id 才是 YouTube Video ID
+              // 注意：videos 表中沒有 video_id 欄位，id 就是 YouTube Video ID
               if (clipVideoIds.length > 0) {
-                console.log('Clip Video IDs (情況1):', clipVideoIds)
-                // 使用 video_id 欄位進行比對（TEXT 型別）
+                console.log('Step 3: 在 videos 表中查找這些精華影片 (使用 id 欄位)...', clipVideoIds)
+                // 使用 id 欄位進行比對（videos.id 就是 YouTube Video ID）
                 const { data: videosData, error: videosError } = await supabase
                   .from('videos')
                   .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
-                  .in('video_id', clipVideoIds) // 使用 video_id 欄位比對（TEXT 型別）
+                  .in('id', clipVideoIds) // 使用 id 欄位比對（videos.id 就是 YouTube Video ID）
                   .not('clipper_id', 'is', null) // 只取精華
                   .order('published_at', { ascending: false })
                   .limit(20)
                 
                 if (videosError) {
-                  console.warn('第一順位（同場直播-情況1）videos 查詢錯誤:', videosError)
+                  console.warn('Step 3 錯誤: 第一順位（同場直播-情況1）videos 查詢錯誤:', videosError)
                 } else {
-                  console.log('第一順位（同場直播-情況1）找到的影片:', videosData?.length || 0)
+                  console.log('Step 3 成功: 第一順位（同場直播-情況1）找到的影片:', videosData?.length || 0, videosData)
                 }
 
                 if (videosData && videosData.length > 0) {
@@ -86,54 +103,82 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
                     .slice(0, 6)
 
                   if (filteredVideos.length > 0) {
+                    console.log('Step 3 完成: 過濾後的精華影片數量 =', filteredVideos.length)
                     isSameStream = true
                     results = filteredVideos as Video[]
+                  } else {
+                    console.log('Step 3 警告: 過濾後沒有剩餘的精華影片（可能當前影片就是唯一的精華）')
                   }
+                } else {
+                  console.log('Step 3 警告: videos 表中找不到對應的精華影片')
                 }
+              } else {
+                console.log('Step 2 警告: clipVideoIds 為空陣列')
               }
+            } else {
+              console.log('Step 2 警告: clips 表中找不到 related_stream_id =', streamId, '的精華')
             }
+          } else {
+            console.log('Step 1 警告: streams 表中找不到 video_id =', currentVideoId, '的記錄')
           }
         }
         // 情況 2：如果點擊的是精華（有 clipper_id）
         else if (video.clipper_id) {
+          console.log('Step 1 (情況2): 尋找當前精華的 related_stream_id...', currentVideoId)
+          
           // 1. 在 clips 表中找到當前精華的記錄（通過 video_id 比對）
-          const { data: currentClip } = await supabase
+          const { data: currentClip, error: currentClipError } = await supabase
             .from('clips')
             .select('related_stream_id')
             .eq('video_id', currentVideoId) // video_id 是 TEXT，安全比對
             .maybeSingle()
 
+          if (currentClipError) {
+            console.warn('Step 1 (情況2) 錯誤: 查詢 clips 表失敗', currentClipError)
+          } else {
+            console.log('Step 1 (情況2) 結果: currentClip =', currentClip)
+          }
+
           if (currentClip?.related_stream_id) {
             const streamId = currentClip.related_stream_id // UUID
+            console.log('Step 1 (情況2) 成功: 找到 related_stream_id =', streamId)
 
             // 2. 在 clips 表中找到所有 related_stream_id === streamId 的其他精華
-            const { data: clipsData } = await supabase
+            console.log('Step 2 (情況2): 尋找同場精華 IDs (related_stream_id =', streamId, ')...')
+            const { data: clipsData, error: clipsError } = await supabase
               .from('clips')
               .select('video_id')
               .eq('related_stream_id', streamId) // UUID 比對，安全
               .order('published_at', { ascending: false })
               .limit(20)
 
+            if (clipsError) {
+              console.warn('Step 2 (情況2) 錯誤: 查詢 clips 表失敗', clipsError)
+            } else {
+              console.log('Step 2 (情況2) 結果: clipsData =', clipsData, '數量:', clipsData?.length || 0)
+            }
+
             if (clipsData && clipsData.length > 0) {
               const clipVideoIds = clipsData.map(c => c.video_id).filter(Boolean)
+              console.log('Step 2 (情況2) 成功: 找到精華 Video IDs =', clipVideoIds)
 
               // 3. 通過 clips.video_id 去 videos 表找對應的影片資料
-              // 注意：videos.id 是 UUID，videos.video_id 才是 YouTube Video ID
+              // 注意：videos 表中沒有 video_id 欄位，id 就是 YouTube Video ID
               if (clipVideoIds.length > 0) {
-                console.log('Clip Video IDs (情況2):', clipVideoIds)
-                // 使用 video_id 欄位進行比對（TEXT 型別）
+                console.log('Step 3 (情況2): 在 videos 表中查找這些精華影片 (使用 id 欄位)...', clipVideoIds)
+                // 使用 id 欄位進行比對（videos.id 就是 YouTube Video ID）
                 const { data: videosData, error: videosError } = await supabase
                   .from('videos')
                   .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
-                  .in('video_id', clipVideoIds) // 使用 video_id 欄位比對（TEXT 型別）
+                  .in('id', clipVideoIds) // 使用 id 欄位比對（videos.id 就是 YouTube Video ID）
                   .not('clipper_id', 'is', null) // 只取精華
                   .order('published_at', { ascending: false })
                   .limit(20)
                 
                 if (videosError) {
-                  console.warn('第一順位（同場直播-情況2）videos 查詢錯誤:', videosError)
+                  console.warn('Step 3 (情況2) 錯誤: 第一順位（同場直播-情況2）videos 查詢錯誤:', videosError)
                 } else {
-                  console.log('第一順位（同場直播-情況2）找到的影片:', videosData?.length || 0)
+                  console.log('Step 3 (情況2) 成功: 第一順位（同場直播-情況2）找到的影片:', videosData?.length || 0, videosData)
                 }
 
                 if (videosData && videosData.length > 0) {
@@ -143,12 +188,23 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
                     .slice(0, 6)
 
                   if (filteredVideos.length > 0) {
+                    console.log('Step 3 (情況2) 完成: 過濾後的精華影片數量 =', filteredVideos.length)
                     isSameStream = true
                     results = filteredVideos as Video[]
+                  } else {
+                    console.log('Step 3 (情況2) 警告: 過濾後沒有剩餘的精華影片（可能當前影片就是唯一的精華）')
                   }
+                } else {
+                  console.log('Step 3 (情況2) 警告: videos 表中找不到對應的精華影片')
                 }
+              } else {
+                console.log('Step 2 (情況2) 警告: clipVideoIds 為空陣列')
               }
+            } else {
+              console.log('Step 2 (情況2) 警告: clips 表中找不到 related_stream_id =', streamId, '的其他精華')
             }
+          } else {
+            console.log('Step 1 (情況2) 警告: clips 表中找不到 video_id =', currentVideoId, '的記錄，或 related_stream_id 為 null')
           }
         }
       } catch (error) {
@@ -162,7 +218,9 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
       
       if (results.length < 3 && actualMemberId) {
         try {
+          console.log('第二順位: 開始查詢同成員精華，member_id =', actualMemberId)
           // 只查詢基礎欄位，只使用 UUID 比對（member_id 確定是 UUID）
+          // 注意：videos 表中 video_type 的值可能是 'video' 或 'short'，不是 'clip'
           const { data: videosData, error } = await supabase
             .from('videos')
             .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at')
@@ -170,6 +228,7 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
             .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
             .neq('video_type', 'live') // 排除直播
             .neq('video_type', 'archive') // 排除存檔
+            .neq('video_type', 'upcoming') // 排除待機室
             .order('published_at', { ascending: false })
             .limit(12) // 多取一些，以便前端過濾後仍有足夠數量
           
@@ -177,6 +236,14 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
             console.warn('第二順位查詢錯誤:', error)
           } else {
             console.log('第二順位（同成員）找到的影片:', videosData?.length || 0)
+            if (videosData && videosData.length > 0) {
+              console.log('第二順位影片詳情:', videosData.map(v => ({ id: v.id, title: v.title, video_type: v.video_type, clipper_id: v.clipper_id })))
+            } else {
+              console.log('第二順位警告: 查詢成功但沒有找到任何影片。可能原因：')
+              console.log('  - member_id 不匹配')
+              console.log('  - 所有影片的 clipper_id 都是 null')
+              console.log('  - 所有影片的 video_type 都是 live/archive/upcoming')
+            }
           }
 
           if (error) {
