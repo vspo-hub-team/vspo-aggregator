@@ -310,9 +310,10 @@ export default function ClippersPage() {
       }
 
       // 查詢這些頻道的近期影片（按發布時間降序，限制 1000 筆）
+      // 必須包含 related_stream_id 欄位，用於同場直播關聯查詢
       const { data: recentVideos, error: videosError } = await supabase
         .from('videos')
-        .select('id, title, thumbnail_url, published_at, view_count, duration_sec, clipper_id')
+        .select('id, related_stream_id, title, thumbnail_url, published_at, view_count, duration_sec, clipper_id')
         .in('clipper_id', clipperIds)
         .not('clipper_id', 'is', null)
         .order('published_at', { ascending: false })

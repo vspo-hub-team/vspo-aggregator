@@ -25,12 +25,14 @@ export function ClipperListView({ lang }: { lang: 'ja' | 'zh' }) {
     queryKey: ['clippers', lang],
     queryFn: async () => {
       // 抓取 clipper 及其所有影片 (包含 view_count 和 subscriber_count)
+      // 必須包含 related_stream_id 欄位，用於同場直播關聯查詢
       const { data, error } = await supabase
         .from('clippers')
         .select(`
           *,
           videos (
             id,
+            related_stream_id,
             title,
             thumbnail_url,
             published_at,
