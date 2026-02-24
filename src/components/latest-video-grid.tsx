@@ -127,10 +127,11 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
     // 根據 MainTab 決定 select 語句（使用 !inner 強制關聯）
     // 明確包含 member_id 字段，確保不會因為關聯展開而丟失
     // 注意：只包含資料庫中確實存在的欄位，避免 400 錯誤
+    // videos 表中沒有 video_id 欄位，id 就是 YouTube Video ID
     const selectClause = 
       mainTab === 'jp_clips' || mainTab === 'cn_clips'
-        ? 'id, video_id, member_id, clipper_id, platform, title, thumbnail_url, published_at, view_count, video_type, duration_sec, created_at, updated_at, member:members(*), clipper:clippers!inner(*)'
-        : 'id, video_id, member_id, clipper_id, platform, title, thumbnail_url, published_at, view_count, video_type, duration_sec, created_at, updated_at, member:members(*), clipper:clippers(*)'
+        ? 'id, member_id, clipper_id, platform, title, thumbnail_url, published_at, view_count, video_type, duration_sec, created_at, updated_at, member:members(*), clipper:clippers!inner(*)'
+        : 'id, member_id, clipper_id, platform, title, thumbnail_url, published_at, view_count, video_type, duration_sec, created_at, updated_at, member:members(*), clipper:clippers(*)'
 
     let query = supabase
       .from('videos')
