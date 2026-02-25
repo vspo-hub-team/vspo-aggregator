@@ -85,7 +85,7 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
         // 包含所有精華類型：video, short, clip（無視大小寫）
         .or('video_type.eq.video,video_type.eq.Video,video_type.eq.VIDEO,video_type.eq.short,video_type.eq.Short,video_type.eq.SHORT,video_type.eq.clip,video_type.eq.Clip,video_type.eq.CLIP')
         .order('published_at', { ascending: false })
-        .limit(20)
+        .limit(30)
 
       if (error) {
         console.warn('查詢同場精華失敗:', error)
@@ -97,10 +97,9 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
         return { videos: [] }
       }
 
-      // 前端過濾：排除當前影片
+      // 前端過濾：排除當前影片（數量上限由資料庫查詢的 limit 控制）
       const filteredVideos = videosData
-        .filter(v => v.id !== video.id)
-        .slice(0, 6) as Video[]
+        .filter(v => v.id !== video.id) as Video[]
 
       console.log(`嚴格模式: 找到 ${filteredVideos.length} 部同場精華`)
       return { videos: filteredVideos }
