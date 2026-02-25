@@ -220,52 +220,62 @@ function extractVideoId(url: string): string {
  * 從 description 中提取原直播的 YouTube Video ID
  * 優先掃描包含特定關鍵字的區域附近的網址
  */
-function extractSourceVideoId(description: string | null | undefined): string | null {
-  if (!description) return null
-  
-  // 關鍵字列表（用於優先匹配）
-  const keywords = ['元動画', '原影片', '元配信', '本編', 'Source', 'Archive', '元配', '元動', '本編動画', '元配信動画']
-  
-  // 先嘗試在關鍵字附近尋找
-  for (const keyword of keywords) {
-    // 在關鍵字前後各 200 字元範圍內尋找 YouTube 網址
-    const keywordIndex = description.indexOf(keyword)
-    if (keywordIndex !== -1) {
-      const start = Math.max(0, keywordIndex - 200)
-      const end = Math.min(description.length, keywordIndex + keyword.length + 200)
-      const context = description.substring(start, end)
-      
-      // 在上下文中尋找 YouTube 網址
-      const matches = context.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/g)
-      if (matches && matches.length > 0) {
-        // 提取第一個匹配的 Video ID
-        const videoIdMatch = matches[0].match(/([a-zA-Z0-9_-]{11})/)
-        if (videoIdMatch && videoIdMatch[1]) {
-          return videoIdMatch[1]
+/**
+ * 從 description 中提取原直播的 Video ID（支援 YouTube 和 Twitch）
+ * 智慧計算距離「關鍵字」最近的正確來源，支援多個網址與特殊符號關鍵字
+ * 返回格式：{ id: string, platform: 'youtube' | 'twitch' } | null
+ */
+function extractSourceVideoId(description: string | null | undefined): { id: string; platform: 'youtube' | 'twitch' } | null {
+  if (!description) return null;
+
+  // 1. 防呆正則表達式 (每次執行重新配對，避免 lastIndex Bug)
+  const ytRegex = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|live\/|shorts\/|v\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/gi;
+  const twitchRegex = /twitch\.tv\/videos\/(\d+)/gi;
+
+  // 2. 擴充關鍵字清單 (加入所有可能的變體與符號)
+  const keywords = ['元配信', '元動画', '本編', 'アーカイブ', '配信元', '📺', '▽', '■'];
+
+  // 3. 找出所有 YouTube 與 Twitch ID 及其在文章中的位置
+  const ytMatches = [...description.matchAll(ytRegex)];
+  const twitchMatches = [...description.matchAll(twitchRegex)];
+
+  const allLinks = [
+    ...ytMatches.map(m => ({ id: m[1], platform: 'youtube' as const, index: m.index! })),
+    ...twitchMatches.map(m => ({ id: m[1], platform: 'twitch' as const, index: m.index! }))
+  ];
+
+  if (allLinks.length === 0) return null;
+  if (allLinks.length === 1) return { id: allLinks[0].id, platform: allLinks[0].platform };
+
+  // 4. 如果有多個網址，尋找距離「關鍵字」最近的那個網址
+  let bestLink = allLinks[0];
+  let minDistance = Infinity;
+
+  for (const link of allLinks) {
+    for (const keyword of keywords) {
+      const keywordIndex = description.lastIndexOf(keyword, link.index);
+      if (keywordIndex !== -1) {
+        const distance = link.index - keywordIndex;
+        // 限制在 300 字元內，避免抓到毫不相干的網址
+        if (distance > 0 && distance < minDistance && distance < 300) {
+          minDistance = distance;
+          bestLink = link;
         }
       }
     }
   }
-  
-  // 如果關鍵字附近沒找到，則在整個 description 中尋找
-  const allMatches = description.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/g)
-  if (allMatches && allMatches.length > 0) {
-    // 提取第一個匹配的 Video ID
-    const videoIdMatch = allMatches[0].match(/([a-zA-Z0-9_-]{11})/)
-    if (videoIdMatch && videoIdMatch[1]) {
-      return videoIdMatch[1]
-    }
-  }
-  
-  return null
+
+  return { id: bestLink.id, platform: bestLink.platform };
 }
 
 /**
- * 根據 YouTube Video ID 查找對應的 stream UUID
+ * 根據 Video ID 和平台查找對應的 stream UUID
  * 先在 streams 表中查找，如果找不到則嘗試在 videos 表中查找並自動創建 stream 記錄
  * 如果都找不到，則創建一個空殼 stream（Skeleton Stream）以實現群組化
+ * @param sourceInfo - { id: string, platform: 'youtube' | 'twitch' }
  */
-async function findStreamIdByVideoId(videoId: string): Promise<string | null> {
+async function findStreamIdByVideoId(sourceInfo: { id: string; platform: 'youtube' | 'twitch' }): Promise<string | null> {
+  const { id: videoId, platform } = sourceInfo
   // 1. 先在 streams 表中查找
   const { data: streamData } = await supabase
     .from('streams')
@@ -340,12 +350,12 @@ async function findStreamIdByVideoId(videoId: string): Promise<string | null> {
   
   // 3. 如果 streams 和 videos 表中都找不到，創建一個空殼 stream（Skeleton Stream）
   // 這樣可以讓同一個 source_video_id 的精華影片獲得相同的 related_stream_id，實現群組化
-  console.log(`  🔧 [滴血認親] 找不到任何記錄，創建空殼 stream (video_id: ${videoId})...`)
+  console.log(`  🔧 [滴血認親] 找不到任何記錄，創建空殼 stream (video_id: ${videoId}, platform: ${platform})...`)
   const { data: skeletonStreamData, error: skeletonStreamError } = await supabase
     .from('streams')
     .insert({
       video_id: videoId,
-      platform: 'youtube', // 預設為 youtube（大部分精華來自 YouTube）
+      platform: platform, // 使用提取到的平台資訊（youtube 或 twitch）
       title: null,
       published_at: null,
       member_id: null
@@ -1239,13 +1249,13 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
         }, { onConflict: 'id' })
         
         // ===== 自動綁定原直播 (滴血認親) =====
-        // 從 description 中提取原直播的 YouTube Video ID
-        const sourceVideoId = extractSourceVideoId(description)
-        if (sourceVideoId) {
-          console.log(`  🔗 [滴血認親] 從 description 提取到原直播 ID: ${sourceVideoId} (${isNewVideo ? '新影片' : '已存在影片'})`)
+        // 從 description 中提取原直播的 Video ID（支援 YouTube 和 Twitch）
+        const sourceInfo = extractSourceVideoId(description)
+        if (sourceInfo) {
+          console.log(`  🔗 [滴血認親] 從 description 提取到原直播 ID: ${sourceInfo.platform}://${sourceInfo.id} (${isNewVideo ? '新影片' : '已存在影片'})`)
           
           // 查找對應的 stream UUID
-          const streamId = await findStreamIdByVideoId(sourceVideoId)
+          const streamId = await findStreamIdByVideoId(sourceInfo)
           if (streamId) {
             console.log(`  ✅ [滴血認親] 找到對應的 stream UUID: ${streamId}`)
             
@@ -1262,7 +1272,7 @@ async function processClipper(clipper: Clipper, idx: number, total: number) {
               console.log(`  🎉 [滴血認親] 成功綁定 related_stream_id = ${streamId}`)
             }
           } else {
-            console.log(`  ⚠️ [滴血認親] 找不到對應的 stream UUID (video_id: ${sourceVideoId})`)
+            console.log(`  ⚠️ [滴血認親] 找不到對應的 stream UUID (source: ${sourceInfo.platform}://${sourceInfo.id})`)
           }
         } else {
           // 如果沒有從 description 提取到，嘗試檢查 videos 表是否已有記錄
