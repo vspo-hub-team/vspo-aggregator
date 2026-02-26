@@ -390,41 +390,94 @@ function isValidUpcoming(time: string | undefined): boolean {
 }
 
 /**
- * 安全過濾邏輯：檢查影片是否符合 VSPO 相關（三道防線）
- * 只要符合任一條件就允許存入
+ * 安全過濾邏輯：檢查影片是否符合 VSPO 相關（白名單 + 關鍵字「雙重驗證」）
+ * 規則：
+ * 1. 「許諾番号」不再單獨作為通過條件，僅作為輔助訊號
+ * 2. 影片 title 或 description 必須至少命中一個 VSPO 白名單名稱/標籤/關鍵字
+ * 3. 若完全沒有 VSPO 名稱或關鍵字，就算有許諾番号也一律視為非 VSPO 影片
  */
 async function isVSPORelated(
   title: string,
   description: string | null | undefined,
   memberNames: { name_jp: string; name_zh: string }[]
 ): Promise<boolean> {
-  const titleLower = title.toLowerCase()
-  const descLower = (description || '').toLowerCase()
-  const combinedText = `${titleLower} ${descLower}`
+  const rawCombined = `${title || ''} ${description || ''}`
+  const lowerCombined = rawCombined.toLowerCase()
 
-  // 防線 1: 包含官方授權碼字眼
-  if (title.includes('許諾番号') || (description && description.includes('許諾番号'))) {
-    return true
+  // 1. 專屬 VSPO 白名單（成員名字 / 暱稱 / Hashtag 等）
+  //   - 這裡只放較「不會誤傷」的關鍵字，之後可以再擴充
+  const VSPO_NAME_WHITELIST = [
+    '橘ひなの',
+    '兎咲ミミ',
+    '胡桃のあ',
+    '英リサ',
+    '小町のの',
+    '一ノ瀬うるは',
+    '八雲べに',
+    '花芽すみれ',
+    '花芽なずな',
+    '橘ひなの',
+    '猫汰つな',
+    '白波らむね',
+    '紫宮るな',
+    '如月れん',
+    '水無瀬',
+  ]
+
+  const VSPO_TAG_WHITELIST = [
+    '#ぶいすぽ',
+    '#ぶいすぽっ',
+    '#vspo',
+    '#ぶいすぽ所属',
+  ]
+
+  // 2. 通用 VSPO 關鍵字（沿用舊邏輯，但不再和「許諾番号」綁在一起）
+  const genericKeywords = ['ぶいすぽ', 'ぶいすぽっ', 'vspo', 'VSPO']
+
+  // 3. 是否出現許諾番号（現在僅作為輔助訊號，不再單獨放行）
+  const hasLicenseWord =
+    rawCombined.includes('許諾番号') || rawCombined.includes('許諾番號')
+
+  // 4. 是否命中 VSPO 名稱白名單 / Hashtag 白名單
+  const hasWhitelistedName = VSPO_NAME_WHITELIST.some((kw) =>
+    rawCombined.includes(kw)
+  )
+
+  const hasWhitelistedTag = VSPO_TAG_WHITELIST.some((kw) =>
+    rawCombined.includes(kw)
+  )
+
+  // 5. 是否命中通用 VSPO 關鍵字（大小寫不敏感）
+  const hasGenericVSPOKeyword = genericKeywords.some((kw) =>
+    lowerCombined.includes(kw.toLowerCase())
+  )
+
+  // 6. 是否命中資料庫成員名字（這本身就等同白名單一部分）
+  const hasDbMemberName = memberNames.some((member) => {
+    const nameJp = member.name_jp?.trim()
+    const nameZh = member.name_zh?.trim()
+    if (!nameJp && !nameZh) return false
+    return (
+      (nameJp && rawCombined.includes(nameJp)) ||
+      (nameZh && rawCombined.includes(nameZh))
+    )
+  })
+
+  const hasAnyVSPOIndicator =
+    hasWhitelistedName ||
+    hasWhitelistedTag ||
+    hasGenericVSPOKeyword ||
+    hasDbMemberName
+
+  // 「極度重要」規則實作：
+  // - 如果完全沒有任何 VSPO 名稱 / Tag / 關鍵字，無論是否包含許諾番号，一律視為非 VSPO
+  if (!hasAnyVSPOIndicator) {
+    return false
   }
 
-  // 防線 2: 包含通用關鍵字（忽略大小寫）
-  const keywords = ['ぶいすぽ', 'ぶいすぽっ', 'vspo', 'VSPO']
-  for (const keyword of keywords) {
-    if (combinedText.includes(keyword.toLowerCase())) {
-      return true
-    }
-  }
-
-  // 防線 3: 包含資料庫中任一位成員的日文或中文名字
-  for (const member of memberNames) {
-    if (combinedText.includes(member.name_jp.toLowerCase()) || 
-        combinedText.includes(member.name_zh.toLowerCase())) {
-      return true
-    }
-  }
-
-  // 三個條件都不符合，判定為非相關影片
-  return false
+  // 只要有 VSPO 名稱 / Tag / 關鍵字，就視為 VSPO 相關
+  // 許諾番号只作為輔助訊號，不再是獨立放行條件
+  return true
 }
 
 // --- Main Fetching Logic ---

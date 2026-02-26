@@ -79,7 +79,26 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
       // 在 videos 表中查詢所有 related_stream_id 等於該 streamId 的影片
       const { data: videosData, error } = await supabase
         .from('videos')
-        .select('id, title, thumbnail_url, member_id, clipper_id, published_at, view_count, video_type, duration_sec, platform, created_at, updated_at, related_stream_id')
+        .select(`
+          id,
+          video_id,
+          channel_id,
+          member_id,
+          clipper_id,
+          platform,
+          title,
+          thumbnail_url,
+          published_at,
+          view_count,
+          concurrent_viewers,
+          video_type,
+          duration_sec,
+          created_at,
+          updated_at,
+          related_stream_id,
+          member:members(*),
+          clipper:clippers(*)
+        `)
         .eq('related_stream_id', streamId)
         .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
         // 包含所有精華類型：video, short, clip（無視大小寫）
@@ -97,9 +116,15 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
         return { videos: [] }
       }
 
-      // 前端過濾：排除當前影片（數量上限由資料庫查詢的 limit 控制）
-      const filteredVideos = videosData
-        .filter(v => v.id !== video.id) as Video[]
+      // 將 Supabase 關聯欄位 member/clipper 映射回型別定義中的 members/clipper
+      // 並在前端過濾掉當前這一部影片本身
+      const filteredVideos = (videosData as any[])
+        .filter((v) => v.id !== video.id)
+        .map((v) => ({
+          ...v,
+          members: v.member ?? null,
+          clipper: v.clipper ?? null,
+        })) as Video[]
 
       console.log(`嚴格模式: 找到 ${filteredVideos.length} 部同場精華`)
       return { videos: filteredVideos }
