@@ -96,8 +96,8 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
           created_at,
           updated_at,
           related_stream_id,
-          member:members(*),
-          clipper:clippers(*)
+          members(*),
+          clippers(*)
         `)
         .eq('related_stream_id', streamId)
         .not('clipper_id', 'is', null) // 只取精華（有 clipper_id）
@@ -122,8 +122,8 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
         .filter((v) => v.id !== video.id)
         .map((v) => ({
           ...v,
-          members: v.member ?? null,
-          clipper: v.clipper ?? null,
+          members: v.members ?? null,
+          clipper: v.clippers ?? null,
         })) as Video[]
 
       console.log(`嚴格模式: 找到 ${filteredVideos.length} 部同場精華`)
