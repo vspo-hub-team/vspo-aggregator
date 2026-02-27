@@ -77,11 +77,11 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
       }
 
       // 在 videos 表中查詢所有 related_stream_id 等於該 streamId 的影片
+      // 在 videos 表中查詢所有 related_stream_id 等於該 streamId 的影片
       const { data: videosData, error } = await supabase
         .from('videos')
         .select(`
           id,
-          channel_id,
           member_id,
           clipper_id,
           platform,
