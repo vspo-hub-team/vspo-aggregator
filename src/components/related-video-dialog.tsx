@@ -81,7 +81,6 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
         .from('videos')
         .select(`
           id,
-          video_id,
           channel_id,
           member_id,
           clipper_id,
