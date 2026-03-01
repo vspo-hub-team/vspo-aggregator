@@ -27,17 +27,17 @@ const youtubeApiKey = process.env.YOUTUBE_API_KEY
 
 if (!supabaseUrl) {
   console.error('❌ 錯誤：缺少 SUPABASE_URL 環境變數')
-  process.exit(1)
+  throw new Error('Missing SUPABASE_URL environment variable')
 }
 
 if (!supabaseServiceRoleKey) {
   console.error('❌ 錯誤：缺少 SUPABASE_SERVICE_ROLE_KEY 環境變數')
-  process.exit(1)
+  throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable')
 }
 
 if (!youtubeApiKey) {
   console.error('❌ 錯誤：缺少 YOUTUBE_API_KEY 環境變數')
-  process.exit(1)
+  throw new Error('Missing YOUTUBE_API_KEY environment variable')
 }
 
 // 初始化 Supabase Client (使用 Service Role Key 以獲得寫入權限)
