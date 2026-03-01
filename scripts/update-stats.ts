@@ -81,7 +81,7 @@ async function fetchVideoStatistics(videoIds: string[]): Promise<YouTubeVideoRes
     const url = new URL(`${YOUTUBE_API_BASE}/videos`)
     url.searchParams.set('part', 'statistics')
     url.searchParams.set('id', videoIds.join(','))
-    url.searchParams.set('key', youtubeApiKey)
+    url.searchParams.set('key', youtubeApiKey as string)
 
     const response = await fetch(url.toString())
 
