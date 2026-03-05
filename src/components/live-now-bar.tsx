@@ -123,7 +123,7 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
   return (
     <>
       <div className={`relative z-50 mb-6 rounded-xl border ${containerBorderColor} bg-gray-900/80 backdrop-blur-md shadow-lg`}>
-        <div className="flex flex-nowrap items-start gap-4 overflow-x-auto p-4 pb-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div className="flex flex-nowrap items-start gap-4 overflow-x-auto scroll-smooth p-4 pb-3 custom-scrollbar">
           {/* 左側標題 */}
           <div className="flex-shrink-0 flex items-center gap-2 px-2 md:px-3 pt-2">
             <span className="text-xl md:text-2xl animate-pulse">🔴</span>
