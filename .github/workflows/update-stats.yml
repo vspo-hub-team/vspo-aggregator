@@ -1,0 +1,30 @@
+name: Update Video Stats (每6小時更新觀看數)
+
+on:
+  schedule:
+    # 使用 Cron 語法，每 6 小時跑一次
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # 保留這個按鈕，讓站長可以在 GitHub 後台手動點擊測試
+
+jobs:
+  update-stats:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 下載最新程式碼 (Checkout)
+        uses: actions/checkout@v4
+
+      - name: ⚙️ 設定 Node.js 環境
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # 確保版本夠新
+
+      - name: 📦 安裝依賴套件 (Install Dependencies)
+        run: npm install
+
+      - name: 🚀 執行觀看數更新腳本
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: npx tsx scripts/update-stats.ts
