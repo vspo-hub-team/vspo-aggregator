@@ -1,10 +1,16 @@
 'use client'
 
 import Link from 'next/link'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export function Navbar() {
   return (
     <nav className="relative overflow-hidden flex flex-col items-center justify-center w-full py-12 md:py-16 border-b border-white/5 bg-background">
+      {/* 主題切換按鈕 - 右上角 */}
+      <div className="absolute top-4 right-4 md:top-6 md:right-8">
+        <ThemeToggle />
+      </div>
+
       {/* Aurora Glow 背景效果 */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-cyan-500/10 blur-[100px] pointer-events-none -z-10 rounded-full" />
 
