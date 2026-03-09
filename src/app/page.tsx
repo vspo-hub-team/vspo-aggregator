@@ -54,7 +54,7 @@ function HomeContent() {
         video_id: v.video_id || v.id, // id 就是 YouTube Video ID
         members: v.members ?? null,
         clipper: v.clippers ?? null,
-      })) as Video[]
+      })) as unknown as Video[]
 
       return mappedVideos
     },
@@ -91,7 +91,7 @@ function HomeContent() {
         video_id: videoData.video_id || videoData.id,
         members: videoData.members ?? null,
         clipper: videoData.clippers ?? null,
-      } as Video
+      } as unknown as Video
 
       return mappedVideo
     },
