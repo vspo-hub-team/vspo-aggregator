@@ -35,7 +35,7 @@ export function Navbar() {
         <div className="flex items-center space-x-2">
           <MobileSidebar />
           <Link href="/" className="flex items-center space-x-2">
-            <span className="text-xl font-bold">VSPO 觀測站</span>
+            <h1 className="text-2xl font-bold text-white tracking-wider">VSPO 觀測站</h1>
           </Link>
         </div>
 

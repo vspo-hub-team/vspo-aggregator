@@ -69,7 +69,7 @@ function HomeContent() {
     queryFn: async () => {
       if (!videoIdFromUrl) return null
 
-      // 查詢特定 ID 的影片
+      // 直接查詢資料庫（因為影片可能不在首頁預設載入的清單內）
       const { data: videoData, error } = await supabase
         .from('videos')
         .select('id, member_id, clipper_id, platform, title, thumbnail_url, published_at, view_count, concurrent_viewers, video_type, duration_sec, created_at, updated_at, related_stream_id, members(*), clippers(*)')
@@ -99,12 +99,24 @@ function HomeContent() {
   })
 
   // 處理 URL 參數：自動彈出同場精華對話框
+  // 優先檢查現有列表，找不到再使用查詢結果
   useEffect(() => {
+    if (!videoIdFromUrl) return
+
+    // 步驟 1：先在現有的影片列表中尋找（本週熱門影片）
+    const foundInTrending = trendingVideos.find((v) => v.id === videoIdFromUrl)
+    if (foundInTrending) {
+      setSelectedVideoForDialog(foundInTrending)
+      setIsDialogOpen(true)
+      return
+    }
+
+    // 步驟 2：如果在現有列表中找不到，使用查詢結果
     if (urlVideo) {
       setSelectedVideoForDialog(urlVideo)
       setIsDialogOpen(true)
     }
-  }, [urlVideo])
+  }, [videoIdFromUrl, trendingVideos, urlVideo])
 
   return (
     <main className="min-h-screen bg-gray-950 p-6 md:p-8">
