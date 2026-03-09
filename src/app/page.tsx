@@ -1,17 +1,23 @@
 'use client'
 
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { useMembers } from '@/hooks/use-members'
 import { supabase } from '@/lib/supabase'
 import { LiveNowBar } from '@/components/live-now-bar'
 import { LatestVideoGrid } from '@/components/latest-video-grid'
 import { LatestVideoCard } from '@/components/latest-video-card'
+import { RelatedVideoDialog } from '@/components/related-video-dialog'
 import { Video } from '@/types/database'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 
-export default function Home() {
+function HomeContent() {
   const { data: members } = useMembers()
+  const searchParams = useSearchParams()
+  const [selectedVideoForDialog, setSelectedVideoForDialog] = useState<Video | null>(null)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   // 查詢本週熱門影片
   const { data: trendingVideos = [], isLoading: isLoadingTrending } = useQuery<Video[]>({
@@ -53,6 +59,52 @@ export default function Home() {
       return mappedVideos
     },
   })
+
+  // 從 URL 參數取得影片 ID
+  const videoIdFromUrl = searchParams.get('v')
+
+  // 查詢 URL 參數指定的影片（僅在有 URL 參數時才查詢）
+  const { data: urlVideo } = useQuery<Video | null>({
+    queryKey: ['video-by-id', videoIdFromUrl],
+    queryFn: async () => {
+      if (!videoIdFromUrl) return null
+
+      // 查詢特定 ID 的影片
+      const { data: videoData, error } = await supabase
+        .from('videos')
+        .select('id, member_id, clipper_id, platform, title, thumbnail_url, published_at, view_count, concurrent_viewers, video_type, duration_sec, created_at, updated_at, related_stream_id, members(*), clippers(*)')
+        .eq('id', videoIdFromUrl)
+        .maybeSingle()
+
+      if (error) {
+        console.error('查詢影片失敗:', error)
+        return null
+      }
+
+      if (!videoData) {
+        return null
+      }
+
+      // 將 Supabase 關聯欄位 members/clippers 映射回型別定義中的 members/clipper
+      const mappedVideo = {
+        ...videoData,
+        video_id: videoData.video_id || videoData.id,
+        members: videoData.members ?? null,
+        clipper: videoData.clippers ?? null,
+      } as Video
+
+      return mappedVideo
+    },
+    enabled: !!videoIdFromUrl, // 只在有 URL 參數時才查詢
+  })
+
+  // 處理 URL 參數：自動彈出同場精華對話框
+  useEffect(() => {
+    if (urlVideo) {
+      setSelectedVideoForDialog(urlVideo)
+      setIsDialogOpen(true)
+    }
+  }, [urlVideo])
 
   return (
     <main className="min-h-screen bg-gray-950 p-6 md:p-8">
@@ -97,6 +149,35 @@ export default function Home() {
         {/* 最新影片牆 */}
         <LatestVideoGrid />
       </div>
+
+      {/* URL 參數觸發的同場精華對話框 */}
+      {selectedVideoForDialog && (
+        <RelatedVideoDialog
+          video={selectedVideoForDialog}
+          open={isDialogOpen}
+          onOpenChange={(open) => {
+            setIsDialogOpen(open)
+            if (!open) {
+              // 關閉對話框時清除選中的影片
+              setSelectedVideoForDialog(null)
+            }
+          }}
+        />
+      )}
     </main>
+  )
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gray-950 p-6 md:p-8">
+        <div className="max-w-7xl mx-auto">
+          <Skeleton className="h-12 w-64 mb-8" />
+        </div>
+      </main>
+    }>
+      <HomeContent />
+    </Suspense>
   )
 }

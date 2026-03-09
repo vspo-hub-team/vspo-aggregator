@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VSPO! Aggregator",
+  title: "VSPO 觀測站 | ぶいすぽっ！直播與精華總站",
   description: "VTuber 精華影片與直播聚合平台",
 };
 

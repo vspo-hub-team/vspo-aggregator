@@ -12,6 +12,8 @@ import {
 import { LatestVideoCard } from '@/components/latest-video-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Share2 } from 'lucide-react'
 
 interface RelatedVideoDialogProps {
   video: Video
@@ -136,11 +138,34 @@ export function RelatedVideoDialog({ video, open, onOpenChange }: RelatedVideoDi
 
   const videos = relatedVideosData?.videos || []
 
+  // 複製同場精華連結
+  const handleCopyLink = async () => {
+    try {
+      const shareUrl = `${window.location.origin}/?v=${video.id}`
+      await navigator.clipboard.writeText(shareUrl)
+      alert('已複製同場精華連結！')
+    } catch (error) {
+      console.error('複製連結失敗:', error)
+      alert('複製連結失敗，請手動複製網址')
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{dialogTitle}</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>{dialogTitle}</DialogTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyLink}
+              className="flex items-center gap-2"
+            >
+              <Share2 className="h-4 w-4" />
+              分享連結
+            </Button>
+          </div>
         </DialogHeader>
 
         {isLoading ? (
