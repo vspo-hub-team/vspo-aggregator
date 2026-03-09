@@ -88,7 +88,7 @@ function HomeContent() {
       // 將 Supabase 關聯欄位 members/clippers 映射回型別定義中的 members/clipper
       const mappedVideo = {
         ...videoData,
-        video_id: videoData.video_id || videoData.id,
+        video_id: videoData.id,  // 直接用 id 就好！
         members: videoData.members ?? null,
         clipper: videoData.clippers ?? null,
       } as unknown as Video
