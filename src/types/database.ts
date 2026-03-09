@@ -73,8 +73,8 @@ export interface StreamWithMember extends Stream {
 
 export interface Video {
   id: string // UUID (主鍵，實際上是 YouTube Video ID)
-  video_id: string // YouTube Video ID (UNIQUE)
-  channel_id: string | null // YouTube/Twitch Channel ID
+  video_id?: string | null // YouTube Video ID (UNIQUE) - 選填，因為可能使用 id 欄位
+  channel_id?: string | null // YouTube/Twitch Channel ID - 已棄用，改用 member_id 與 clipper_id
   member_id: string | null // UUID reference to members
   clipper_id: number | null // BIGINT reference to clippers (烤肉頻道)
   platform: 'youtube' | 'twitch' | 'bilibili' | null // 影片來源平台
