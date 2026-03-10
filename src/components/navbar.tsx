@@ -5,7 +5,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 
 export function Navbar() {
   return (
-    <nav className="relative overflow-hidden flex flex-col items-center justify-center w-full py-12 md:py-16 border-b border-white/5 bg-background">
+    <nav className="relative overflow-hidden flex flex-col items-center justify-center w-full py-12 md:py-16 border-b border-slate-200 dark:border-white/5 bg-white dark:bg-background">
       {/* 主題切換按鈕 - 右上角 */}
       <div className="absolute top-4 right-4 md:top-6 md:right-8">
         <ThemeToggle />
@@ -21,7 +21,7 @@ export function Navbar() {
             VSPO 觀測站
           </h1>
         </Link>
-        <p className="text-slate-400/80 text-xs md:text-sm tracking-[0.3em] font-medium mt-2 text-center">
+        <p className="text-slate-500 dark:text-slate-400/80 text-xs md:text-sm tracking-[0.3em] font-medium mt-2 text-center">
           ぶいすぽっ！非公式クリップ & アーカイブ
         </p>
       </div>

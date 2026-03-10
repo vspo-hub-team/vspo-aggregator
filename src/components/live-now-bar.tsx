@@ -84,9 +84,9 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
   // 空狀態處理：如果沒有任何直播項目，顯示提示訊息
   if (sortedItems.length === 0) {
     return (
-      <div className="relative z-50 mb-6 rounded-xl border border-gray-700/30 bg-gray-900/80 backdrop-blur-md shadow-lg">
+      <div className="relative z-50 mb-6 rounded-xl border border-slate-200 dark:border-gray-700/30 bg-white dark:bg-gray-900/80 backdrop-blur-md shadow-lg">
         <div className="flex items-center justify-center p-6">
-          <p className="text-gray-400 text-sm md:text-base">目前無直播預定</p>
+          <p className="text-slate-500 dark:text-gray-400 text-sm md:text-base">目前無直播預定</p>
         </div>
       </div>
     )
@@ -122,12 +122,12 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
 
   return (
     <>
-      <div className={`relative z-50 mb-6 rounded-xl border ${containerBorderColor} bg-gray-900/80 backdrop-blur-md shadow-lg`}>
+      <div className={`relative z-50 mb-6 rounded-xl border ${containerBorderColor} bg-white dark:bg-gray-900/80 backdrop-blur-md shadow-lg`}>
         <div className="flex flex-nowrap items-start gap-4 overflow-x-auto scroll-smooth p-4 pb-3 custom-scrollbar">
           {/* 左側標題 */}
           <div className="flex-shrink-0 flex items-center gap-2 px-2 md:px-3 pt-2">
             <span className="text-xl md:text-2xl animate-pulse">🔴</span>
-            <span className="text-base md:text-lg font-bold text-white whitespace-nowrap">
+            <span className="text-base md:text-lg font-bold text-slate-900 dark:text-white whitespace-nowrap">
               LIVE NOW
             </span>
           </div>
@@ -326,11 +326,11 @@ function LiveMemberItem({
         {/* 名字或時間 */}
         <div className="text-center min-w-[60px]">
           {isUpcoming && startTime ? (
-            <p className="text-[10px] md:text-xs font-semibold text-gray-300 whitespace-nowrap">
+            <p className="text-[10px] md:text-xs font-semibold text-slate-600 dark:text-gray-300 whitespace-nowrap">
               {startTime}
             </p>
           ) : (
-            <p className="text-[10px] md:text-xs font-semibold text-white whitespace-nowrap truncate">
+            <p className="text-[10px] md:text-xs font-semibold text-slate-900 dark:text-white whitespace-nowrap truncate">
               {member.name_jp}
             </p>
           )}
@@ -419,7 +419,7 @@ function Tooltip({ item, position, onMouseLeave }: TooltipProps) {
       href={linkUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="fixed z-[9999] w-[200px] md:w-[240px] bg-black/90 rounded-lg overflow-hidden shadow-2xl pointer-events-auto transition-opacity duration-300"
+      className="fixed z-[9999] w-[200px] md:w-[240px] bg-white/90 dark:bg-black/90 rounded-lg overflow-hidden shadow-2xl pointer-events-auto transition-opacity duration-300"
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
@@ -447,7 +447,7 @@ function Tooltip({ item, position, onMouseLeave }: TooltipProps) {
       <div className="p-3 space-y-2">
         {/* 直播標題 (限制 2 行) */}
         {liveTitle && (
-          <p className="text-sm text-white font-medium line-clamp-2 leading-snug">
+          <p className="text-sm text-slate-900 dark:text-white font-medium line-clamp-2 leading-snug">
             {liveTitle}
           </p>
         )}
@@ -456,7 +456,7 @@ function Tooltip({ item, position, onMouseLeave }: TooltipProps) {
         <div className="flex items-center justify-center pt-1">
           {isLive ? (
             <span
-              className={`px-3 py-1 text-white text-xs font-bold rounded-full ${
+              className={`px-3 py-1 text-white dark:text-white text-xs font-bold rounded-full ${
                 isTwitchLive ? 'bg-purple-600' : isYouTubeLive ? 'bg-red-600' : ''
               }`}
               style={!isTwitchLive && !isYouTubeLive ? { backgroundColor: buttonColor } : undefined}
@@ -464,12 +464,12 @@ function Tooltip({ item, position, onMouseLeave }: TooltipProps) {
               WATCH NOW
             </span>
           ) : isUpcoming ? (
-            <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
+            <span className="px-3 py-1 bg-blue-600 text-white dark:text-white text-xs font-bold rounded-full">
               COMING SOON
             </span>
           ) : (
             <span
-              className={`px-3 py-1 text-white text-xs font-bold rounded-full ${
+              className={`px-3 py-1 text-white dark:text-white text-xs font-bold rounded-full ${
                 isTwitchLive ? 'bg-purple-600' : isYouTubeLive ? 'bg-red-600' : ''
               }`}
               style={!isTwitchLive && !isYouTubeLive ? { backgroundColor: buttonColor } : undefined}

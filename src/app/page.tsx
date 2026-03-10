@@ -119,7 +119,7 @@ function HomeContent() {
   }, [videoIdFromUrl, trendingVideos, urlVideo])
 
   return (
-    <main className="min-h-screen bg-gray-950 p-6 md:p-8">
+    <main className="min-h-screen bg-slate-50 dark:bg-gray-950 p-6 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* 正在直播快速列 */}
         {members && <LiveNowBar members={members} />}
@@ -127,13 +127,13 @@ function HomeContent() {
         {/* 本週熱門精華區塊 */}
         {trendingVideos.length > 0 && (
           <div className="mb-12">
-            <h2 className="text-2xl md:text-3xl font-bold text-white mb-6">
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-6">
               🔥 本週熱門精華 (Trending This Week)
             </h2>
             {isLoadingTrending ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <Card key={i} className="overflow-hidden bg-gray-900 border-gray-800">
+                  <Card key={i} className="overflow-hidden bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-800">
                     <Skeleton className="aspect-video w-full" />
                     <div className="p-3 space-y-2">
                       <Skeleton className="h-4 w-full" />
@@ -154,7 +154,7 @@ function HomeContent() {
         )}
 
         {/* 標題 */}
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-8">
+        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-8">
           最新影片 / Latest Videos
         </h1>
 
@@ -183,7 +183,7 @@ function HomeContent() {
 export default function Home() {
   return (
     <Suspense fallback={
-      <main className="min-h-screen bg-gray-950 p-6 md:p-8">
+      <main className="min-h-screen bg-slate-50 dark:bg-gray-950 p-6 md:p-8">
         <div className="max-w-7xl mx-auto">
           <Skeleton className="h-12 w-64 mb-8" />
         </div>

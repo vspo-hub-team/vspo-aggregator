@@ -397,7 +397,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
           className={`rounded-full px-6 py-2 ${
             mainTab === 'archives'
               ? 'bg-purple-600 hover:bg-purple-700 text-white border-purple-600'
-              : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 border-gray-600'
+              : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
           }`}
         >
           直播存檔
@@ -408,7 +408,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
           className={`rounded-full px-6 py-2 ${
             mainTab === 'jp_clips'
               ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600'
-              : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 border-gray-600'
+              : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
           }`}
         >
           日文精華
@@ -419,7 +419,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
           className={`rounded-full px-6 py-2 ${
             mainTab === 'cn_clips'
               ? 'bg-cyan-600 hover:bg-cyan-700 text-white border-cyan-600'
-              : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 border-gray-600'
+              : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
           }`}
         >
           中文精華
@@ -441,13 +441,13 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
             <div
               className={`w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center border-2 text-xl md:text-2xl ${
                 selectedMember === null
-                  ? 'border-white bg-white/20'
-                  : 'border-gray-600 bg-gray-800/50'
+                  ? 'border-slate-900 dark:border-white bg-slate-200 dark:bg-white/20'
+                  : 'border-slate-300 dark:border-gray-600 bg-slate-100 dark:bg-gray-800/50'
               }`}
             >
               🌐
             </div>
-            <span className="text-xs text-gray-300 whitespace-nowrap">全部</span>
+            <span className="text-xs text-slate-700 dark:text-gray-300 whitespace-nowrap">全部</span>
           </button>
 
           {sortedMembers.map((member) => (
@@ -463,8 +463,8 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
               <div
                 className={`w-12 h-12 md:w-14 md:h-14 rounded-full overflow-hidden border-2 ${
                   selectedMember === member.id
-                    ? 'border-white ring-2 ring-white/50'
-                    : 'border-gray-600'
+                    ? 'border-slate-900 dark:border-white ring-2 ring-slate-300 dark:ring-white/50'
+                    : 'border-slate-300 dark:border-gray-600'
                 }`}
               >
                 {member.avatar_url ? (
@@ -484,7 +484,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
                   </div>
                 )}
               </div>
-              <span className="text-xs text-gray-300 whitespace-nowrap max-w-[60px] truncate">
+              <span className="text-xs text-slate-700 dark:text-gray-300 whitespace-nowrap max-w-[60px] truncate">
                 {member.name_jp || member.name_zh || '成員'}
               </span>
             </button>
@@ -583,7 +583,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
             <Button
               variant="outline"
               size="sm"
-              className="relative rounded-full transition-all bg-gray-800/50 hover:bg-gray-700/50 text-gray-300"
+                className="relative rounded-full transition-all bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300"
             >
               <span className="relative z-10">精華頻道列表</span>
             </Button>
@@ -597,20 +597,20 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
         <ClipperListView lang={mainTab === 'cn_clips' ? 'zh' : 'ja'} />
       ) : filteredVideos.length === 0 ? (
         <div className="text-center py-12">
-          <Card className="bg-gray-900/80 backdrop-blur-md border-gray-700 p-8 max-w-md mx-auto">
+          <Card className="bg-white dark:bg-gray-900/80 backdrop-blur-md border-slate-200 dark:border-gray-700 p-8 max-w-md mx-auto">
             {searchQuery ? (
               <>
                 <div className="text-4xl mb-4">🔍</div>
-                <h3 className="text-xl font-semibold text-gray-300 mb-2">
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-gray-300 mb-2">
                   找不到相關影片
                 </h3>
-                <p className="text-sm text-gray-400 mb-4">
+                <p className="text-sm text-slate-600 dark:text-gray-400 mb-4">
                   沒有找到與「<span className="text-purple-400 font-medium">{searchQuery}</span>」相關的影片
                 </p>
                 <Button
                   onClick={handleClearSearch}
                   variant="outline"
-                  className="bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 border-gray-600"
+                  className="bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600"
                 >
                   清除搜尋
                 </Button>
@@ -618,10 +618,10 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
             ) : (
               <>
                 <div className="text-4xl mb-4">📭</div>
-                <h3 className="text-xl font-semibold text-gray-300 mb-2">
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-gray-300 mb-2">
                   目前沒有符合條件的影片
                 </h3>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-slate-600 dark:text-gray-400">
                   請嘗試調整篩選條件或搜尋關鍵字
                 </p>
               </>
@@ -642,7 +642,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
               <Button
                 onClick={handleLoadMore}
                 disabled={isLoading || isLoadingMore}
-                className="w-full max-w-md bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 border border-gray-600 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full max-w-md bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border border-slate-300 dark:border-gray-600 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoadingMore ? (
                   <span className="flex items-center gap-2">
@@ -655,7 +655,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
               </Button>
             ) : videos.length > 0 ? (
               <div className="text-center text-sm text-muted-foreground py-4">
-                <span className="text-gray-400">已經到底囉！</span>
+                <span className="text-slate-600 dark:text-gray-400">已經到底囉！</span>
               </div>
             ) : null}
           </div>
