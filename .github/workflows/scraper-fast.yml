@@ -1,4 +1,4 @@
-name: Fast Mode Update
+name: ⚡ 快速更新 (Fast Mode - 每2h)
 
 on:
   schedule:

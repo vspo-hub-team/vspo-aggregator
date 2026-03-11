@@ -1,4 +1,4 @@
-name: 更新觀看次數 (Update Video Stats)
+name: 📊 更新觀看數 (Update Stats - 每12h)
 
 on:
   schedule:

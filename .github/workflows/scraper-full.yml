@@ -1,4 +1,4 @@
-name: Full Mode Sync
+name: 🔄 全面同步 (Full Sync - 每6h)
 
 on:
   schedule:
