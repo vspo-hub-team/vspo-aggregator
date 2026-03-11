@@ -2,12 +2,13 @@ name: Fast Mode Update
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '0 */2 * * *'
   workflow_dispatch:
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     # 🌟 必殺技：把環境變數放在整個 Job 的最上面，所有步驟都能強制作效！
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
