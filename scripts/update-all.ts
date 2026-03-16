@@ -735,6 +735,35 @@ async function processMember(member: Member, idx: number, total: number, twitchT
     }
   }
 
+  // 建立本次從 YouTube API 成功取得詳細資料的影片 ID 集合
+  const apiVideoIdSet = new Set<string>(videos.map((v) => v.id))
+
+  // 殭屍清除：找出資料庫中標記為 live，但這次 API 沒有回傳的影片
+  const zombieIds: string[] = []
+  for (const [videoId, videoType] of existingVideoMap.entries()) {
+    if (videoType === 'live' && !apiVideoIdSet.has(videoId)) {
+      zombieIds.push(videoId)
+    }
+  }
+
+  if (zombieIds.length > 0) {
+    console.log(`  🧹 發現 ${zombieIds.length} 部疑似殭屍直播，將其標記為 archive...`)
+    const { error: zombieUpdateError } = await supabase
+      .from('videos')
+      .update({
+        video_type: 'archive',
+        concurrent_viewers: 0,
+        updated_at: new Date().toISOString(),
+      })
+      .in('id', zombieIds)
+
+    if (zombieUpdateError) {
+      console.warn(`  ⚠️ 殭屍直播清理失敗: ${zombieUpdateError.message}`)
+    } else {
+      console.log(`  ✅ 已將 ${zombieIds.length} 部殭屍直播標記為 archive`)
+    }
+  }
+
   const videosToInsert = videos.map((v) => {
     const viewCount = parseInt(v.statistics?.viewCount || '0', 10)
     const durationSec = parseDuration(v.contentDetails?.duration || '')

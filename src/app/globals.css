@@ -156,3 +156,12 @@
     background-color: rgba(156, 163, 175, 0.7);
   }
 }
+/* 讓自訂捲軸吃動態主題色 */
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--theme-color, #8b5cf6) !important;
+  border-radius: 9999px;
+}
+
+.custom-scrollbar {
+  scrollbar-color: var(--theme-color, #8b5cf6) transparent !important;
+}

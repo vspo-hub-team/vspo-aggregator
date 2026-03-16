@@ -14,6 +14,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
 import { ClipperListView } from './clipper-list-view'
 import { SearchBar } from './search-bar'
+import { VSPO_THEME_COLORS, DEFAULT_THEME_COLOR } from '@/lib/vspo-theme-colors'
 import Link from 'next/link'
 
 type MainTab = 'archives' | 'jp_clips' | 'cn_clips'
@@ -123,6 +124,37 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
       setSelectedMember(memberId)
     }
   }, [memberId])
+
+  // 根據當前選中的成員計算應援色（Theme Color）
+  const currentThemeColor = useMemo(() => {
+    if (!selectedMember) return DEFAULT_THEME_COLOR
+
+    const m = members.find((mm) => mm.id === selectedMember)
+    if (!m) return DEFAULT_THEME_COLOR
+
+    // 依照 name_jp / name_zh 嘗試查表，否則退回成員自身 color_hex 或預設色
+    const byName =
+      (m.name_jp && VSPO_THEME_COLORS[m.name_jp]) ||
+      (m.name_zh && VSPO_THEME_COLORS[m.name_zh]) ||
+      null
+
+    return byName || m.color_hex || DEFAULT_THEME_COLOR
+  }, [members, selectedMember])
+
+  // 動態注入 CSS 變數（全域 theme color）
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+
+    const root = document.documentElement
+    const previous = root.style.getPropertyValue('--theme-color') || DEFAULT_THEME_COLOR
+
+    root.style.setProperty('--theme-color', currentThemeColor || DEFAULT_THEME_COLOR)
+
+    return () => {
+      // 在元件卸載時還原為預設主題色
+      root.style.setProperty('--theme-color', previous || DEFAULT_THEME_COLOR)
+    }
+  }, [currentThemeColor])
 
   // 構建查詢函數（將篩選邏輯移到後端）
   const buildQuery = (pageParam: number = 0) => {
@@ -453,7 +485,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
                   size="sm"
                   className={`rounded-full ${
                     sortBy === 'latest'
-                      ? 'bg-purple-600/80 hover:bg-purple-700/80 text-white'
+                      ? 'bg-[var(--theme-color)] hover:brightness-110 text-white'
                       : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
                   }`}
                 >
@@ -465,7 +497,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
                   size="sm"
                   className={`rounded-full ${
                     sortBy === 'most_viewed'
-                      ? 'bg-purple-600/80 hover:bg-purple-700/80 text-white'
+                      ? 'bg-[var(--theme-color)] hover:brightness-110 text-white'
                       : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
                   }`}
                 >
@@ -486,34 +518,49 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
       <div className="flex flex-wrap gap-3">
         <Button
           onClick={() => handleMainTabChange('archives')}
-          variant={mainTab === 'archives' ? 'default' : 'outline'}
+          variant="outline"
           className={`rounded-full px-6 py-2 ${
             mainTab === 'archives'
-              ? 'bg-purple-600 hover:bg-purple-700 text-white border-purple-600'
+              ? 'text-white border-transparent'
               : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
           }`}
+          style={
+            mainTab === 'archives'
+              ? { backgroundColor: 'var(--theme-color)', borderColor: 'var(--theme-color)' }
+              : undefined
+          }
         >
           直播存檔
         </Button>
         <Button
           onClick={() => handleMainTabChange('jp_clips')}
-          variant={mainTab === 'jp_clips' ? 'default' : 'outline'}
+          variant="outline"
           className={`rounded-full px-6 py-2 ${
             mainTab === 'jp_clips'
-              ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600'
+              ? 'text-white border-transparent'
               : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
           }`}
+          style={
+            mainTab === 'jp_clips'
+              ? { backgroundColor: 'var(--theme-color)', borderColor: 'var(--theme-color)' }
+              : undefined
+          }
         >
           日文精華
         </Button>
         <Button
           onClick={() => handleMainTabChange('cn_clips')}
-          variant={mainTab === 'cn_clips' ? 'default' : 'outline'}
+          variant="outline"
           className={`rounded-full px-6 py-2 ${
             mainTab === 'cn_clips'
-              ? 'bg-cyan-600 hover:bg-cyan-700 text-white border-cyan-600'
+              ? 'text-white border-transparent'
               : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
           }`}
+          style={
+            mainTab === 'cn_clips'
+              ? { backgroundColor: 'var(--theme-color)', borderColor: 'var(--theme-color)' }
+              : undefined
+          }
         >
           中文精華
         </Button>
@@ -522,7 +569,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
       {/* UI 區域二：成員篩選列（如果沒有強制綁定 memberId 才顯示） */}
       {!memberId && (
         <div className="w-full">
-          <div className="flex flex-nowrap overflow-x-auto w-full gap-3 pb-4 custom-scrollbar">
+            <div className="flex flex-nowrap overflow-x-auto w-full gap-3 pb-4 custom-scrollbar">
           <button
             onClick={() => setSelectedMember(null)}
             className={`flex-shrink-0 flex flex-col items-center gap-2 transition-all ${
@@ -534,7 +581,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
             <div
               className={`w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center border-2 text-xl md:text-2xl ${
                 selectedMember === null
-                  ? 'border-slate-900 dark:border-white bg-slate-200 dark:bg-white/20'
+                  ? 'border-[var(--theme-color)] bg-slate-200 dark:bg-white/20'
                   : 'border-slate-300 dark:border-gray-600 bg-slate-100 dark:bg-gray-800/50'
               }`}
             >
@@ -556,7 +603,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
               <div
                 className={`w-12 h-12 md:w-14 md:h-14 rounded-full overflow-hidden border-2 ${
                   selectedMember === member.id
-                    ? 'border-slate-900 dark:border-white ring-2 ring-slate-300 dark:ring-white/50'
+                    ? 'border-[var(--theme-color)] ring-2 ring-[color-mix(in_oklab,var(--theme-color)_70%,white_30%)]'
                     : 'border-slate-300 dark:border-gray-600'
                 }`}
               >
@@ -592,37 +639,52 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
           {/* 平台過濾 */}
           <Button
             onClick={() => setPlatformFilter('all')}
-            variant={platformFilter === 'all' ? 'default' : 'outline'}
+            variant="outline"
             size="sm"
             className={`rounded-full ${
               platformFilter === 'all'
-                ? 'bg-purple-600/80 hover:bg-purple-700/80 text-white'
+                ? 'text-white border-transparent'
                 : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-300'
             }`}
+            style={
+              platformFilter === 'all'
+                ? { backgroundColor: 'var(--theme-color)', borderColor: 'var(--theme-color)' }
+                : undefined
+            }
           >
             全部
           </Button>
           <Button
             onClick={() => setPlatformFilter('youtube')}
-            variant={platformFilter === 'youtube' ? 'default' : 'outline'}
+            variant="outline"
             size="sm"
             className={`rounded-full ${
               platformFilter === 'youtube'
-                ? 'bg-purple-600/80 hover:bg-purple-700/80 text-white'
+                ? 'text-white border-transparent'
                 : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-300'
             }`}
+            style={
+              platformFilter === 'youtube'
+                ? { backgroundColor: 'var(--theme-color)', borderColor: 'var(--theme-color)' }
+                : undefined
+            }
           >
             YouTube
           </Button>
           <Button
             onClick={() => setPlatformFilter('twitch')}
-            variant={platformFilter === 'twitch' ? 'default' : 'outline'}
+            variant="outline"
             size="sm"
             className={`rounded-full ${
               platformFilter === 'twitch'
-                ? 'bg-purple-600/80 hover:bg-purple-700/80 text-white'
+                ? 'text-white border-transparent'
                 : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-300'
             }`}
+            style={
+              platformFilter === 'twitch'
+                ? { backgroundColor: 'var(--theme-color)', borderColor: 'var(--theme-color)' }
+                : undefined
+            }
           >
             Twitch
           </Button>
@@ -632,43 +694,52 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={() => setContentFilter('all')}
-            variant={contentFilter === 'all' ? 'default' : 'outline'}
+            variant="outline"
             size="sm"
             className={`rounded-full ${
               contentFilter === 'all'
-                ? mainTab === 'jp_clips'
-                  ? 'bg-blue-600/80 hover:bg-blue-700/80 text-white'
-                  : 'bg-cyan-600/80 hover:bg-cyan-700/80 text-white'
+                ? 'text-white border-transparent'
                 : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-300'
             }`}
+            style={
+              contentFilter === 'all'
+                ? { backgroundColor: 'var(--theme-color)', borderColor: 'var(--theme-color)' }
+                : undefined
+            }
           >
             全部
           </Button>
           <Button
             onClick={() => setContentFilter('video')}
-            variant={contentFilter === 'video' ? 'default' : 'outline'}
+            variant="outline"
             size="sm"
             className={`rounded-full ${
               contentFilter === 'video'
-                ? mainTab === 'jp_clips'
-                  ? 'bg-blue-600/80 hover:bg-blue-700/80 text-white'
-                  : 'bg-cyan-600/80 hover:bg-cyan-700/80 text-white'
+                ? 'text-white border-transparent'
                 : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-300'
             }`}
+            style={
+              contentFilter === 'video'
+                ? { backgroundColor: 'var(--theme-color)', borderColor: 'var(--theme-color)' }
+                : undefined
+            }
           >
             影片
           </Button>
           <Button
             onClick={() => setContentFilter('shorts')}
-            variant={contentFilter === 'shorts' ? 'default' : 'outline'}
+            variant="outline"
             size="sm"
             className={`rounded-full ${
               contentFilter === 'shorts'
-                ? mainTab === 'jp_clips'
-                  ? 'bg-blue-600/80 hover:bg-blue-700/80 text-white'
-                  : 'bg-cyan-600/80 hover:bg-cyan-700/80 text-white'
+                ? 'text-white border-transparent'
                 : 'bg-gray-800/50 hover:bg-gray-700/50 text-gray-300'
             }`}
+            style={
+              contentFilter === 'shorts'
+                ? { backgroundColor: 'var(--theme-color)', borderColor: 'var(--theme-color)' }
+                : undefined
+            }
           >
             Shorts
           </Button>
@@ -676,7 +747,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
             <Button
               variant="outline"
               size="sm"
-                className="relative rounded-full transition-all bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300"
+              className="relative rounded-full transition-all bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300"
             >
               <span className="relative z-10">精華頻道列表</span>
             </Button>

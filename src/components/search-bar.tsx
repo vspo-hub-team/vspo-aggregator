@@ -102,8 +102,8 @@ export function SearchBar({ onSearch, onClear, searchQuery, debounceMs = 400 }: 
           {/* 搜索按钮 */}
           <Button
             onClick={handleSearch}
-            className="h-8 px-4 bg-purple-600 hover:bg-purple-700 
-                       text-white rounded-full text-sm font-medium"
+            className="h-8 px-4 bg-[var(--theme-color)] hover:brightness-110 
+                       text-white rounded-full text-sm font-medium transition-colors"
           >
             搜尋
           </Button>

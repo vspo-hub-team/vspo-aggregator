@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMembers } from '@/hooks/use-members'
 import { supabase } from '@/lib/supabase'
 import { LiveNowBar } from '@/components/live-now-bar'
+import { NowLiveSection } from '@/components/now-live-section'
 import { LatestVideoGrid } from '@/components/latest-video-grid'
 import { LatestVideoCard } from '@/components/latest-video-card'
 import { RelatedVideoDialog } from '@/components/related-video-dialog'
@@ -121,8 +122,11 @@ function HomeContent() {
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-gray-950 p-6 md:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* 正在直播快速列 */}
+        {/* 正在直播快速列（成員頭像條） */}
         {members && <LiveNowBar members={members} />}
+
+        {/* 現正直播中 (Now Live) 影片區塊 */}
+        <NowLiveSection />
 
         {/* 本週熱門精華區塊 */}
         {trendingVideos.length > 0 && (
