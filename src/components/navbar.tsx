@@ -25,6 +25,23 @@ export function Navbar() {
           ぶいすぽっ！非公式クリップ & アーカイブ
         </p>
       </div>
+
+      {/* 導覽連結 */}
+      <div className="mt-6 flex items-center gap-3 text-sm">
+        <Link
+          href="/"
+          className="px-4 py-1.5 rounded-full bg-slate-900 text-slate-50 border border-slate-700 hover:bg-slate-800 transition-colors"
+        >
+          🏠 首頁 / Home
+        </Link>
+        <Link
+          href="/leaderboard"
+          className="px-4 py-1.5 rounded-full bg-slate-800 text-slate-100 border border-yellow-400/70 hover:bg-slate-700 hover:border-yellow-300 transition-colors flex items-center gap-2"
+        >
+          <span>🏆 排行榜</span>
+          <span className="hidden md:inline text-xs text-yellow-200/80">Leaderboard</span>
+        </Link>
+      </div>
     </nav>
   )
 }
