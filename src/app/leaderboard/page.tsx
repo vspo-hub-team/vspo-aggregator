@@ -212,7 +212,10 @@ export default function LeaderboardPage() {
                   }`}
                   style={
                     hofTab === 'official'
-                      ? { backgroundColor: 'var(--theme-color)', borderColor: 'var(--theme-color)' }
+                      ? {
+                          backgroundColor: 'var(--theme-color, #8b5cf6)',
+                          borderColor: 'var(--theme-color, #8b5cf6)',
+                        }
                       : undefined
                   }
                 >
@@ -228,7 +231,10 @@ export default function LeaderboardPage() {
                   }`}
                   style={
                     hofTab === 'clip'
-                      ? { backgroundColor: 'var(--theme-color)', borderColor: 'var(--theme-color)' }
+                      ? {
+                          backgroundColor: 'var(--theme-color, #8b5cf6)',
+                          borderColor: 'var(--theme-color, #8b5cf6)',
+                        }
                       : undefined
                   }
                 >
