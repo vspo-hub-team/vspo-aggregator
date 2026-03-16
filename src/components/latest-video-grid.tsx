@@ -139,7 +139,6 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
     let query = supabase
       .from('videos')
       .select(selectClause)
-      .order('published_at', { ascending: false })
 
     // 根據 MainTab 篩選
     if (mainTab === 'archives') {
@@ -288,9 +287,12 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
       // 最新上傳：按 published_at 降序
       query = query.order('published_at', { ascending: false })
     } else if (sortBy === 'most_viewed') {
-      // 最多觀看：按 view_count 降序（排除 view_count 為 null 的影片）
+      // 最多觀看：僅限最近 30 天內，按 view_count 降序（排除 view_count 為 null 或 0 的影片）
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
       query = query
+        .gte('published_at', thirtyDaysAgo)
         .not('view_count', 'is', null)
+        .gt('view_count', 0)
         .order('view_count', { ascending: false })
     }
 
@@ -384,7 +386,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
     return [...allVideos]
   }, [allVideos])
 
-  // 當切換 MainTab 時，重置次級過濾
+  // 當切換 MainTab 時，重置次級過濾與排序
   const handleMainTabChange = (tab: MainTab) => {
     setMainTab(tab)
     setPlatformFilter('all')
@@ -392,6 +394,8 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
     // Clips 模式可以保留用戶選擇的時長過濾
     if (tab === 'archives') {
       setContentFilter('all')
+      // 在直播存檔模式下強制使用「最新上傳」排序
+      setSortBy('latest')
     }
   }
 
@@ -437,36 +441,45 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
           debounceMs={400}
         />
         
-        {/* 排序篩選器 */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-600 dark:text-gray-400 whitespace-nowrap">排序：</span>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setSortBy('latest')}
-              variant={sortBy === 'latest' ? 'default' : 'outline'}
-              size="sm"
-              className={`rounded-full ${
-                sortBy === 'latest'
-                  ? 'bg-purple-600/80 hover:bg-purple-700/80 text-white'
-                  : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
-              }`}
-            >
-              最新上傳
-            </Button>
-            <Button
-              onClick={() => setSortBy('most_viewed')}
-              variant={sortBy === 'most_viewed' ? 'default' : 'outline'}
-              size="sm"
-              className={`rounded-full ${
-                sortBy === 'most_viewed'
-                  ? 'bg-purple-600/80 hover:bg-purple-700/80 text-white'
-                  : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
-              }`}
-            >
-              最多觀看
-            </Button>
+        {/* 排序篩選器：僅在精華模式 (日文/中文精華) 顯示 */}
+        {(mainTab === 'jp_clips' || mainTab === 'cn_clips') && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-600 dark:text-gray-400 whitespace-nowrap">排序：</span>
+            <div className="flex items-center gap-3">
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setSortBy('latest')}
+                  variant={sortBy === 'latest' ? 'default' : 'outline'}
+                  size="sm"
+                  className={`rounded-full ${
+                    sortBy === 'latest'
+                      ? 'bg-purple-600/80 hover:bg-purple-700/80 text-white'
+                      : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
+                  }`}
+                >
+                  最新上傳
+                </Button>
+                <Button
+                  onClick={() => setSortBy('most_viewed')}
+                  variant={sortBy === 'most_viewed' ? 'default' : 'outline'}
+                  size="sm"
+                  className={`rounded-full ${
+                    sortBy === 'most_viewed'
+                      ? 'bg-purple-600/80 hover:bg-purple-700/80 text-white'
+                      : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
+                  }`}
+                >
+                  最多觀看
+                </Button>
+              </div>
+              {sortBy === 'most_viewed' && (
+                <span className="text-sm text-gray-500">
+                  （近 30 天內熱門）
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* UI 區域一：頂部導覽 (Main Tabs) */}
@@ -710,6 +723,12 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
         </div>
       ) : (
         <>
+          {/* 最多觀看模式說明標籤（精華模式） */}
+          {(mainTab === 'jp_clips' || mainTab === 'cn_clips') && sortBy === 'most_viewed' && (
+            <div className="text-sm text-gray-500">
+              目前顯示為「最近 30 天內」的熱門精華，依觀看次數由高到低排序。
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredVideos.map((video) => (
               <LatestVideoCard key={video.id} video={video} />
