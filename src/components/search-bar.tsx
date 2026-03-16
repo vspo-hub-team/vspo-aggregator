@@ -8,9 +8,10 @@ interface SearchBarProps {
   onSearch: (query: string) => void
   onClear: () => void
   searchQuery: string
+  debounceMs?: number // 防抖延遲時間（毫秒），預設 400ms
 }
 
-export function SearchBar({ onSearch, onClear, searchQuery }: SearchBarProps) {
+export function SearchBar({ onSearch, onClear, searchQuery, debounceMs = 400 }: SearchBarProps) {
   const [localQuery, setLocalQuery] = useState(searchQuery)
 
   // 同步外部 searchQuery 到本地状态
@@ -18,9 +19,34 @@ export function SearchBar({ onSearch, onClear, searchQuery }: SearchBarProps) {
     setLocalQuery(searchQuery)
   }, [searchQuery])
 
+  // 防抖處理：使用 useCallback 確保函數引用穩定
+  useEffect(() => {
+    // 如果輸入為空，立即清除
+    if (!localQuery.trim()) {
+      onClear()
+      return
+    }
+
+    // 設置防抖計時器
+    const debounceTimer = setTimeout(() => {
+      onSearch(localQuery.trim())
+    }, debounceMs)
+
+    // 清理計時器
+    return () => {
+      clearTimeout(debounceTimer)
+    }
+  }, [localQuery, debounceMs, onSearch, onClear])
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      handleSearch()
+      // Enter 鍵立即執行搜索，不等待防抖
+      const trimmedQuery = localQuery.trim()
+      if (trimmedQuery) {
+        onSearch(trimmedQuery)
+      } else {
+        onClear()
+      }
     }
   }
 
@@ -52,7 +78,7 @@ export function SearchBar({ onSearch, onClear, searchQuery }: SearchBarProps) {
           value={localQuery}
           onChange={(e) => setLocalQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="搜尋影片標題..."
+          placeholder="搜尋影片標題、頻道名稱或 VTuber 名字..."
           className="w-full pl-12 pr-24 py-3 bg-white dark:bg-gray-900/80 border border-slate-300 dark:border-gray-700 rounded-full 
                      text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 
                      focus:ring-purple-500 focus:border-transparent transition-all

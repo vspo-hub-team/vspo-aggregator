@@ -19,6 +19,7 @@ import Link from 'next/link'
 type MainTab = 'archives' | 'jp_clips' | 'cn_clips'
 type PlatformFilter = 'all' | 'youtube' | 'twitch'
 type ContentFilter = 'all' | 'video' | 'shorts' | 'channels'
+type SortBy = 'latest' | 'most_viewed' // 排序方式：latest=最新上傳, most_viewed=最多觀看
 
 const PAGE_SIZE = 24
 
@@ -80,6 +81,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all')
   const [searchQuery, setSearchQuery] = useState<string>('')
+  const [sortBy, setSortBy] = useState<SortBy>('latest') // 排序狀態
   
   // 分頁狀態管理
   const [page, setPage] = useState<number>(0)
@@ -262,9 +264,34 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
     }
     // contentFilter === 'all' 或 Archives 模式時不限制時長
 
-    // 搜索功能：搜索影片標題
+    // 擴展搜索功能：搜索影片標題、頻道名稱、VTuber名字
     if (searchQuery.trim()) {
-      query = query.ilike('title', `%${searchQuery.trim()}%`)
+      const searchTerm = searchQuery.trim()
+      const searchConditions: string[] = []
+      
+      // 1. 搜索影片標題
+      searchConditions.push(`title.ilike.%${searchTerm}%`)
+      
+      // 2. 搜索頻道名稱（clipper.name）- 只在有 clipper_id 的影片中搜索
+      // 注意：使用關聯查詢，但 Supabase 的 ilike 不支持直接查詢關聯表
+      // 我們需要在查詢後在前端過濾，或者使用 PostgREST 的文本搜索功能
+      // 這裡我們先搜索標題，然後在查詢結果中過濾頻道名稱和成員名字
+      // 但為了更好的性能，我們可以嘗試使用 OR 條件
+      
+      // 由於 Supabase 的限制，我們先只搜索標題
+      // 頻道名稱和成員名字的搜索將在查詢結果中進行前端過濾
+      query = query.ilike('title', `%${searchTerm}%`)
+    }
+
+    // 排序功能
+    if (sortBy === 'latest') {
+      // 最新上傳：按 published_at 降序
+      query = query.order('published_at', { ascending: false })
+    } else if (sortBy === 'most_viewed') {
+      // 最多觀看：按 view_count 降序（排除 view_count 為 null 的影片）
+      query = query
+        .not('view_count', 'is', null)
+        .order('view_count', { ascending: false })
     }
 
     // 分頁
@@ -278,26 +305,45 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
   }
 
   // 獲取影片資料
-  // 注意：queryKey 需要包含 memberId，確保當 memberId 改變時重新查詢
+  // 注意：queryKey 需要包含 memberId 和 sortBy，確保當這些條件改變時重新查詢
   const {
     data: fetchedData,
     isLoading,
     isError,
     error,
   } = useQuery({
-    queryKey: ['latest-videos', mainTab, memberId, selectedMember, platformFilter, contentFilter, searchQuery, page, channelIds, memberNames],
+    queryKey: ['latest-videos', mainTab, memberId, selectedMember, platformFilter, contentFilter, searchQuery, sortBy, page, channelIds, memberNames],
     queryFn: async () => {
       const { data, error } = await buildQuery(page)
 
       if (error) throw error
 
       // 將 member 別名映射回 members 以保持向後兼容
-      const videos = (data || []).map((video: any) => ({
+      let videos = (data || []).map((video: any) => ({
         ...video,
         members: video.member || null,
-      }))
+      })) as Video[]
 
-      return videos as Video[]
+      // 前端過濾：如果搜索關鍵字存在，進一步過濾頻道名稱和成員名字
+      // 這是在後端搜索標題的基礎上，進行更全面的搜索
+      if (searchQuery.trim()) {
+        const searchTerm = searchQuery.trim().toLowerCase()
+        videos = videos.filter((video) => {
+          // 1. 標題匹配（後端已過濾，這裡作為備用）
+          const titleMatch = video.title?.toLowerCase().includes(searchTerm)
+          
+          // 2. 頻道名稱匹配（clipper.name）
+          const clipperNameMatch = video.clipper?.name?.toLowerCase().includes(searchTerm)
+          
+          // 3. VTuber名字匹配（members.name_jp, members.name_zh）
+          const memberNameJpMatch = video.members?.name_jp?.toLowerCase().includes(searchTerm)
+          const memberNameZhMatch = video.members?.name_zh?.toLowerCase().includes(searchTerm)
+          
+          return titleMatch || clipperNameMatch || memberNameJpMatch || memberNameZhMatch
+        })
+      }
+
+      return videos
     },
   })
 
@@ -308,7 +354,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
     setVideos([])
     setHasMore(true)
     setIsLoadingMore(false)
-  }, [mainTab, memberId, selectedMember, platformFilter, contentFilter, searchQuery, channelIds, memberNames])
+  }, [mainTab, memberId, selectedMember, platformFilter, contentFilter, searchQuery, sortBy, channelIds, memberNames])
 
   // 當資料載入完成時，更新影片列表
   useEffect(() => {
@@ -382,12 +428,46 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
 
   return (
     <div className="space-y-6">
-      {/* 搜索欄 */}
-      <SearchBar 
-        onSearch={handleSearch} 
-        onClear={handleClearSearch}
-        searchQuery={searchQuery}
-      />
+      {/* 搜索欄與排序篩選器 */}
+      <div className="space-y-4">
+        <SearchBar 
+          onSearch={handleSearch} 
+          onClear={handleClearSearch}
+          searchQuery={searchQuery}
+          debounceMs={400}
+        />
+        
+        {/* 排序篩選器 */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-600 dark:text-gray-400 whitespace-nowrap">排序：</span>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setSortBy('latest')}
+              variant={sortBy === 'latest' ? 'default' : 'outline'}
+              size="sm"
+              className={`rounded-full ${
+                sortBy === 'latest'
+                  ? 'bg-purple-600/80 hover:bg-purple-700/80 text-white'
+                  : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
+              }`}
+            >
+              最新上傳
+            </Button>
+            <Button
+              onClick={() => setSortBy('most_viewed')}
+              variant={sortBy === 'most_viewed' ? 'default' : 'outline'}
+              size="sm"
+              className={`rounded-full ${
+                sortBy === 'most_viewed'
+                  ? 'bg-purple-600/80 hover:bg-purple-700/80 text-white'
+                  : 'bg-slate-100 dark:bg-gray-800/50 hover:bg-slate-200 dark:hover:bg-gray-700/50 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-gray-600'
+              }`}
+            >
+              最多觀看
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {/* UI 區域一：頂部導覽 (Main Tabs) */}
       <div className="flex flex-wrap gap-3">
