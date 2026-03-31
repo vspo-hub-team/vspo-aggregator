@@ -165,7 +165,7 @@ export default function LeaderboardPage() {
   }, [recentVideos])
 
   return (
-    <main className="min-h-screen py-8 md:py-10 px-4 md:px-8">
+    <main className="min-h-screen bg-slate-50/90 dark:bg-slate-950/85 backdrop-blur-sm py-8 md:py-10 px-4 md:px-8">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* 頁面標題區 */}
         <header className="space-y-3">

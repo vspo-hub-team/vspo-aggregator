@@ -143,7 +143,7 @@ export default function MemberProfilePage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen p-6 md:p-8">
+      <main className="min-h-screen bg-slate-950/85 backdrop-blur-sm p-6 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           <Button
             variant="ghost"
@@ -161,7 +161,7 @@ export default function MemberProfilePage() {
 
   if (isError || !member) {
     return (
-      <main className="min-h-screen p-6 md:p-8">
+      <main className="min-h-screen bg-slate-950/85 backdrop-blur-sm p-6 md:p-8">
         <div className="max-w-7xl mx-auto">
           <Button
             variant="ghost"
@@ -181,7 +181,7 @@ export default function MemberProfilePage() {
   }
 
   return (
-    <main className="min-h-screen p-6 md:p-8">
+    <main className="min-h-screen bg-slate-950/85 backdrop-blur-sm p-6 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* 返回按鈕 */}
         <Button
