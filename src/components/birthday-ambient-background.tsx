@@ -11,12 +11,12 @@ export function BirthdayAmbientBackground() {
   if (!avatarUrl) return null
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-0">
+    <div className="fixed inset-0 pointer-events-none z-[1]">
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20 blur-md scale-110"
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40 dark:opacity-35 blur-2xl scale-125"
         style={{ backgroundImage: `url(${avatarUrl})` }}
       />
-      <div className="absolute inset-0 bg-slate-100/70 dark:bg-slate-950/75" />
+      <div className="absolute inset-0 bg-slate-50/35 dark:bg-slate-950/45" />
     </div>
   )
 }

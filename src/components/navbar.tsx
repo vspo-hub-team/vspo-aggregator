@@ -17,10 +17,33 @@ export function Navbar() {
       {/* 主題切換按鈕 - 右上角 */}
       <div className="absolute top-4 right-4 md:top-6 md:right-8 flex items-center gap-2">
         {upcomingBirthday && birthdayNames && (
-          <div className="max-w-[280px] rounded-full border border-pink-300/70 dark:border-pink-400/40 bg-gradient-to-r from-pink-100/90 via-rose-100/90 to-fuchsia-100/90 dark:from-pink-500/20 dark:via-rose-500/20 dark:to-fuchsia-500/20 px-3 py-1.5 text-[11px] md:text-xs font-semibold text-pink-900 dark:text-pink-100 shadow-[0_0_18px_rgba(236,72,153,0.35)] backdrop-blur-sm">
-            {upcomingBirthday.daysUntil === 0
-              ? `🎉 今天是 ${birthdayNames} 的生日！`
-              : `🎂 ${birthdayNames} 生日倒數 ${upcomingBirthday.daysUntil} 天！`}
+          <div className="max-w-[320px] rounded-full border border-pink-300/70 dark:border-pink-400/40 bg-gradient-to-r from-pink-100/90 via-rose-100/90 to-fuchsia-100/90 dark:from-pink-500/20 dark:via-rose-500/20 dark:to-fuchsia-500/20 px-3 py-1.5 text-[11px] md:text-xs font-semibold text-pink-900 dark:text-pink-100 shadow-[0_0_18px_rgba(236,72,153,0.35)] backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <div className="flex -space-x-2">
+                {upcomingBirthday.members.map((member) => (
+                  member.avatar_url ? (
+                    <img
+                      key={member.id}
+                      src={member.avatar_url}
+                      alt={member.name_jp || member.name_zh}
+                      className="w-6 h-6 rounded-full border border-white/70 dark:border-slate-900/70 object-cover"
+                    />
+                  ) : (
+                    <div
+                      key={member.id}
+                      className="w-6 h-6 rounded-full border border-white/70 dark:border-slate-900/70 bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px]"
+                    >
+                      🎂
+                    </div>
+                  )
+                ))}
+              </div>
+              <span>
+                {upcomingBirthday.daysUntil === 0
+                  ? `🎉 今天是 ${birthdayNames} 的生日！`
+                  : `🎂 ${birthdayNames} 生日倒數 ${upcomingBirthday.daysUntil} 天！`}
+              </span>
+            </div>
           </div>
         )}
         <ThemeToggle />
