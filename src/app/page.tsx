@@ -120,7 +120,7 @@ function HomeContent() {
   }, [videoIdFromUrl, trendingVideos, urlVideo])
 
   return (
-    <main className="min-h-screen bg-slate-50/90 dark:bg-slate-950/85 backdrop-blur-sm p-6 md:p-8">
+    <main className="min-h-screen bg-slate-50 dark:bg-gray-950 p-6 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* 正在直播快速列（成員頭像條） */}
         {members && <LiveNowBar members={members} />}
@@ -187,7 +187,7 @@ function HomeContent() {
 export default function Home() {
   return (
     <Suspense fallback={
-      <main className="min-h-screen bg-slate-50/90 dark:bg-slate-950/85 backdrop-blur-sm p-6 md:p-8">
+      <main className="min-h-screen bg-slate-50 dark:bg-gray-950 p-6 md:p-8">
         <div className="max-w-7xl mx-auto">
           <Skeleton className="h-12 w-64 mb-8" />
         </div>
