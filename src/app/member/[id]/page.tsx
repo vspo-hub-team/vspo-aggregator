@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, Youtube, Twitch } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
+import { TWITCH_CHANNEL_MAPPING } from '@/config/members'
 
 function MemberProfileSkeleton() {
   return (
@@ -28,45 +29,13 @@ function MemberProfileSkeleton() {
   )
 }
 
-// Twitch Login Name Mapping
-const TWITCH_LOGINS: Record<string, string> = {
-  '花芽すみれ': 'kagasumire',
-  '花芽なずな': 'nazunakaga',
-  '一ノ瀬うるは': 'ichinose_uruha',
-  '胡桃のあ': 'kurumi_noa',
-  '橘ひなの': 'hinano_tachiba7',
-  '兎咲ミミ': 'tosaki_mimi',
-  '空澄セナ': 'asumisena',
-  '英リサ': 'lisahanabusa',
-  '八雲べに': 'yakumo_beni',
-  '小森めと': 'met_komori',
-  '神成きゅぴ': 'kaminariqpi',
-  '猫汰つな': 'tsuna_nekota',
-  '紫宮るな': 'shinomiya_runa',
-  '白波らむね': 'ramune_shiranami',
-  '如月れん': 'ren_kisaragi',
-  '藍沢エマ': 'ema_aizawa',
-  '夢野あかり': 'akarindao',
-  '夜乃くろむ': 'kuromu_yano',
-  '紡木こかげ': 'kokage_tsumugi',
-  '千燈ゆうひ': 'yuuhi_sendo',
-  '銀城サイネ': 'saine_ginjo',
-  '龍巻ちせ': 'chise_tatsumaki',
-  '甘結もか': 'amayui_moka',
-  'Arya Kuroha': 'aryakuroha',
-  'Jira Jisaki': 'jirajisaki',
-  'Remia Aotsuki': 'remiaaotsuki',
-  'Riko Solari': 'rikosolari',
-  'Narin Mikure': 'narinmikure',
-}
-
 function MemberProfileHeader({ member }: { member: Member }) {
   const youtubeUrl = member.channel_id_yt
     ? `https://www.youtube.com/channel/${member.channel_id_yt}`
     : null
 
   // Twitch 链接：使用 mapping 获取正确的 login name
-  const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh]
+  const twitchLogin = TWITCH_CHANNEL_MAPPING[member.name_jp] || TWITCH_CHANNEL_MAPPING[member.name_zh]
   const twitchUrl = twitchLogin
     ? `https://www.twitch.tv/${twitchLogin}`
     : null

@@ -15,5 +15,8 @@ export const VSPO_THEME_COLORS: Record<string, string> = {
   '小町のの': '#60a5fa',   // 淺藍
   '八雲べに': '#ef4444',   // 紅色
   '紫宮るな': '#e879f9',   // 粉紫
+  '梅園ジュノ': '#8e4585',
+  'Juno Umezono': '#8e4585',
+  '梅園Juno': '#8e4585',
 }
 

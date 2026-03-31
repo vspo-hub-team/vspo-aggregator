@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { format } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
 import { Member } from '@/types/database'
+import { TWITCH_CHANNEL_MAPPING } from '@/config/members'
 
 interface LiveNowBarProps {
   members: Member[]
@@ -172,38 +173,6 @@ function LiveMemberItem({
   const { member, platform, isLive, isUpcoming } = item
   const [imageError, setImageError] = useState(false)
 
-  // Twitch Login Name Mapping（與 member-card.tsx 和 member/[id]/page.tsx 保持一致）
-  const TWITCH_LOGINS: Record<string, string> = {
-    '花芽すみれ': 'kagasumire',
-    '花芽なずな': 'nazunakaga',
-    '一ノ瀬うるは': 'ichinose_uruha',
-    '胡桃のあ': 'kurumi_noa',
-    '橘ひなの': 'hinano_tachiba7',
-    '兎咲ミミ': 'tosaki_mimi',
-    '空澄セナ': 'asumisena',
-    '英リサ': 'lisahanabusa',
-    '八雲べに': 'yakumo_beni',
-    '小森めと': 'met_komori',
-    '神成きゅぴ': 'kaminariqpi',
-    '猫汰つな': 'tsuna_nekota',
-    '紫宮るな': 'shinomiya_runa',
-    '白波らむね': 'ramune_shiranami',
-    '如月れん': 'ren_kisaragi',
-    '藍沢エマ': 'ema_aizawa',
-    '夢野あかり': 'akarindao',
-    '夜乃くろむ': 'kuromu_yano',
-    '紡木こかげ': 'kokage_tsumugi',
-    '千燈ゆうひ': 'yuuhi_sendo',
-    '銀城サイネ': 'saine_ginjo',
-    '龍巻ちせ': 'chise_tatsumaki',
-    '甘結もか': 'amayui_moka',
-    'Arya Kuroha': 'aryakuroha',
-    'Jira Jisaki': 'jirajisaki',
-    'Remia Aotsuki': 'remiaaotsuki',
-    'Riko Solari': 'rikosolari',
-    'Narin Mikure': 'narinmikure',
-  }
-
   const color = member.color_hex || '#888888'
   const isTwitchLive = platform === 'twitch' && isLive
   const isYouTubeLive = platform === 'youtube' && isLive
@@ -219,7 +188,7 @@ function LiveMemberItem({
   if (isLive || isUpcoming) {
     if (platform === 'twitch' && member.channel_id_twitch) {
       // Twitch 直播（優先）
-      const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh] || member.channel_id_twitch
+      const twitchLogin = TWITCH_CHANNEL_MAPPING[member.name_jp] || TWITCH_CHANNEL_MAPPING[member.name_zh] || member.channel_id_twitch
       linkUrl = `https://www.twitch.tv/${twitchLogin}`
     } else if (platform === 'youtube' && liveVideoId) {
       // YouTube 直播或待機室
@@ -348,38 +317,6 @@ interface TooltipProps {
 
 function Tooltip({ item, position, onMouseLeave }: TooltipProps) {
   const { member, platform, isLive, isUpcoming } = item
-  // Twitch Login Name Mapping（與 member-card.tsx 和 member/[id]/page.tsx 保持一致）
-  const TWITCH_LOGINS: Record<string, string> = {
-    '花芽すみれ': 'kagasumire',
-    '花芽なずな': 'nazunakaga',
-    '一ノ瀬うるは': 'ichinose_uruha',
-    '胡桃のあ': 'kurumi_noa',
-    '橘ひなの': 'hinano_tachiba7',
-    '兎咲ミミ': 'tosaki_mimi',
-    '空澄セナ': 'asumisena',
-    '英リサ': 'lisahanabusa',
-    '八雲べに': 'yakumo_beni',
-    '小森めと': 'met_komori',
-    '神成きゅぴ': 'kaminariqpi',
-    '猫汰つな': 'tsuna_nekota',
-    '紫宮るな': 'shinomiya_runa',
-    '白波らむね': 'ramune_shiranami',
-    '如月れん': 'ren_kisaragi',
-    '藍沢エマ': 'ema_aizawa',
-    '夢野あかり': 'akarindao',
-    '夜乃くろむ': 'kuromu_yano',
-    '紡木こかげ': 'kokage_tsumugi',
-    '千燈ゆうひ': 'yuuhi_sendo',
-    '銀城サイネ': 'saine_ginjo',
-    '龍巻ちせ': 'chise_tatsumaki',
-    '甘結もか': 'amayui_moka',
-    'Arya Kuroha': 'aryakuroha',
-    'Jira Jisaki': 'jirajisaki',
-    'Remia Aotsuki': 'remiaaotsuki',
-    'Riko Solari': 'rikosolari',
-    'Narin Mikure': 'narinmikure',
-  }
-
   const isTwitchLive = platform === 'twitch' && isLive
   const isYouTubeLive = platform === 'youtube' && isLive
 
@@ -393,7 +330,7 @@ function Tooltip({ item, position, onMouseLeave }: TooltipProps) {
   if (isLive || isUpcoming) {
     if (platform === 'twitch' && member.channel_id_twitch) {
       // Twitch 直播（優先）
-      const twitchLogin = TWITCH_LOGINS[member.name_jp] || TWITCH_LOGINS[member.name_zh] || member.channel_id_twitch
+      const twitchLogin = TWITCH_CHANNEL_MAPPING[member.name_jp] || TWITCH_CHANNEL_MAPPING[member.name_zh] || member.channel_id_twitch
       linkUrl = `https://www.twitch.tv/${twitchLogin}`
     } else if (platform === 'youtube' && liveVideoId) {
       // YouTube 直播或待機室

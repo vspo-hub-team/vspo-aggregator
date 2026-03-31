@@ -15,6 +15,7 @@ import { zhTW } from 'date-fns/locale'
 import { ClipperListView } from './clipper-list-view'
 import { SearchBar } from './search-bar'
 import { VSPO_THEME_COLORS, DEFAULT_THEME_COLOR } from '@/lib/vspo-theme-colors'
+import { EN_MEMBERS } from '@/config/members'
 import Link from 'next/link'
 
 type MainTab = 'archives' | 'jp_clips' | 'cn_clips'
@@ -94,8 +95,6 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
   const { data: members = [] } = useMembers()
   
   // 排序成員：JP 組優先，EN 組排最後
-  // EN 組名單（根據 name_jp 欄位）
-  const enNames = ['Arya Kuroha', 'Jira Jisaki', 'Remia Aotsuki', 'Riko Solari', 'Narin Mikure']
   const sortedMembers = useMemo(() => {
     if (!members || members.length === 0) return []
     
@@ -104,8 +103,8 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
     
     return [...members].sort((a, b) => {
       // 判斷是否為 EN 組成員（檢查 name_jp 和 name_zh）
-      const isAEn = enNames.includes(a.name_jp) || enNames.includes(a.name_zh)
-      const isBEn = enNames.includes(b.name_jp) || enNames.includes(b.name_zh)
+      const isAEn = EN_MEMBERS.includes(a.name_jp) || EN_MEMBERS.includes(a.name_zh)
+      const isBEn = EN_MEMBERS.includes(b.name_jp) || EN_MEMBERS.includes(b.name_zh)
       
       // 如果 A 是 EN 且 B 是 JP，A 排在後面
       if (isAEn && !isBEn) return 1
