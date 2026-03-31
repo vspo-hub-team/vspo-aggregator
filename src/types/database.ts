@@ -4,6 +4,7 @@ export interface Member {
   id: string // UUID
   name_jp: string
   name_zh: string
+  birthday: string | null // MM-DD
   channel_id_yt: string | null
   channel_id_twitch: string | null
   color_hex: string | null
