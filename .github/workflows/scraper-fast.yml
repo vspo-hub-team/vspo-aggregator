@@ -11,6 +11,7 @@ jobs:
     timeout-minutes: 5
     # 🌟 必殺技：把環境變數放在整個 Job 的最上面，所有步驟都能強制作效！
     env:
+      NPM_CONFIG_LEGACY_PEER_DEPS: true
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -27,7 +28,7 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
       - name: Run Fast Mode Update
         run: npm run update-all -- --fast
