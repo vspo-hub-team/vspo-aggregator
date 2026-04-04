@@ -111,7 +111,7 @@ export function MemberCard({ member }: MemberCardProps) {
             <img
               src={imgSrc}
               alt={member.name_jp}
-              className={`w-full h-full object-cover rounded-full border-2 ${
+              className={`h-full w-full object-cover rounded-full border-2 transition-transform duration-200 group-hover:scale-110 active:scale-95 ${
                 member.is_live ? 'animate-pulse' : ''
               } ${isTwitchLive ? 'ring-2 ring-purple-500' : ''}`}
               style={{ borderColor: borderColor }}
@@ -122,7 +122,7 @@ export function MemberCard({ member }: MemberCardProps) {
             />
           ) : (
             <div
-              className="w-full h-full rounded-full flex items-center justify-center border-2 text-3xl"
+              className="flex h-full w-full items-center justify-center rounded-full border-2 text-3xl transition-transform duration-200 group-hover:scale-110 active:scale-95"
               style={{
                 backgroundColor: `${color}20`,
                 borderColor: color,

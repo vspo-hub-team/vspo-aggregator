@@ -5,15 +5,14 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { Video, Member, Clipper } from '@/types/database'
 import { LatestVideoCard } from '@/components/latest-video-card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useMembers } from '@/hooks/use-members'
 import { formatDistanceToNow } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
 import { ClipperListView } from './clipper-list-view'
 import { SearchBar } from './search-bar'
+import { VideoSkeleton } from '@/components/video-skeleton'
 import { VSPO_THEME_COLORS, DEFAULT_THEME_COLOR } from '@/lib/vspo-theme-colors'
 import { EN_MEMBERS } from '@/config/members'
 import Link from 'next/link'
@@ -54,18 +53,7 @@ function VideoGridSkeleton() {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {Array.from({ length: 12 }).map((_, i) => (
-        <Card key={i} className="overflow-hidden">
-          <Skeleton className="aspect-video w-full" />
-          <div className="p-3 space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-3 w-16" />
-            <div className="flex items-center space-x-2 pt-1">
-              <Skeleton className="h-6 w-6 rounded-full" />
-              <Skeleton className="h-3 w-20" />
-            </div>
-          </div>
-        </Card>
+        <VideoSkeleton key={i} />
       ))}
     </div>
   )
@@ -568,17 +556,18 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
       {/* UI 區域二：成員篩選列（如果沒有強制綁定 memberId 才顯示） */}
       {!memberId && (
         <div className="w-full">
-            <div className="flex flex-nowrap overflow-x-auto w-full gap-3 pb-4 custom-scrollbar">
+            <div className="flex flex-nowrap overflow-x-auto scroll-smooth snap-x snap-proximity w-full gap-3 pb-4 touch-pan-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <button
+            type="button"
             onClick={() => setSelectedMember(null)}
-            className={`flex-shrink-0 flex flex-col items-center gap-2 transition-all ${
+            className={`flex-shrink-0 snap-start flex flex-col items-center gap-2 transition-all touch-manipulation min-h-[44px] min-w-[44px] justify-center ${
               selectedMember === null
                 ? 'opacity-100 scale-105'
                 : 'opacity-60 hover:opacity-80'
             }`}
           >
             <div
-              className={`w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center border-2 text-xl md:text-2xl ${
+              className={`w-11 h-11 min-w-[44px] min-h-[44px] md:w-14 md:h-14 md:min-w-0 md:min-h-0 rounded-full flex items-center justify-center border-2 text-xl md:text-2xl transition-transform duration-200 hover:scale-110 active:scale-95 ${
                 selectedMember === null
                   ? 'border-[var(--theme-color)] bg-slate-200 dark:bg-white/20'
                   : 'border-slate-300 dark:border-gray-600 bg-slate-100 dark:bg-gray-800/50'
@@ -591,16 +580,17 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
 
           {sortedMembers.map((member) => (
             <button
+              type="button"
               key={member.id}
               onClick={() => setSelectedMember(member.id)}
-              className={`flex-shrink-0 flex flex-col items-center gap-2 transition-all ${
+              className={`flex-shrink-0 snap-start flex flex-col items-center gap-2 transition-all touch-manipulation min-h-[44px] min-w-[44px] justify-center ${
                 selectedMember === member.id
                   ? 'opacity-100 scale-105'
                   : 'opacity-60 hover:opacity-80'
               }`}
             >
               <div
-                className={`w-12 h-12 md:w-14 md:h-14 rounded-full overflow-hidden border-2 ${
+                className={`w-11 h-11 min-w-[44px] min-h-[44px] md:w-14 md:h-14 md:min-w-0 md:min-h-0 rounded-full overflow-hidden border-2 transition-transform duration-200 hover:scale-110 active:scale-95 ${
                   selectedMember === member.id
                     ? 'border-[var(--theme-color)] ring-2 ring-[color-mix(in_oklab,var(--theme-color)_70%,white_30%)]'
                     : 'border-slate-300 dark:border-gray-600'
@@ -610,7 +600,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
                   <img
                     src={member.avatar_url}
                     alt={member.name_jp || member.name_zh || '成員'}
-                    className="w-full h-full object-cover"
+                    className="h-full w-full object-cover"
                   />
                 ) : (
                   <div

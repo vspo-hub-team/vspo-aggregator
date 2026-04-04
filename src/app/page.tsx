@@ -13,6 +13,7 @@ import { RelatedVideoDialog } from '@/components/related-video-dialog'
 import { Video } from '@/types/database'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
+import { VideoSkeletonGrid } from '@/components/video-skeleton'
 
 function HomeContent() {
   const { data: members } = useMembers()
@@ -120,7 +121,7 @@ function HomeContent() {
   }, [videoIdFromUrl, trendingVideos, urlVideo])
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-gray-950 p-6 md:p-8">
+    <main className="min-h-screen bg-slate-50 dark:bg-gray-950 px-4 py-6 md:px-8 md:py-8">
       <div className="max-w-7xl mx-auto">
         {/* 正在直播快速列（成員頭像條） */}
         {members && <LiveNowBar members={members} />}
@@ -186,13 +187,19 @@ function HomeContent() {
 
 export default function Home() {
   return (
-    <Suspense fallback={
-      <main className="min-h-screen bg-slate-50 dark:bg-gray-950 p-6 md:p-8">
-        <div className="max-w-7xl mx-auto">
-          <Skeleton className="h-12 w-64 mb-8" />
-        </div>
-      </main>
-    }>
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-50 dark:bg-gray-950 px-4 py-6 md:px-8 md:py-8">
+          <div className="mx-auto max-w-7xl space-y-8">
+            <div className="space-y-2">
+              <Skeleton className="h-10 w-56" />
+              <Skeleton className="h-4 w-96 max-w-full" />
+            </div>
+            <VideoSkeletonGrid count={10} />
+          </div>
+        </main>
+      }
+    >
       <HomeContent />
     </Suspense>
   )

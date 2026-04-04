@@ -32,9 +32,9 @@ export function StreamCard({ stream, hasClips }: StreamCardProps) {
   const hasClipsCount = clipsCount > 0
 
   return (
-    <Card className="group overflow-hidden transition-transform hover:scale-105">
+    <Card className="group gap-0 overflow-hidden p-0 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-indigo-500/10">
       {/* Thumbnail */}
-      <div className="relative aspect-video w-full overflow-hidden bg-muted">
+      <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
         <Link
           href={`https://www.youtube.com/watch?v=${stream.video_id}`}
           target="_blank"
@@ -44,7 +44,7 @@ export function StreamCard({ stream, hasClips }: StreamCardProps) {
             src={thumbnailUrl}
             alt={stream.title || '直播存檔'}
             fill
-            className="object-cover transition-transform group-hover:scale-110"
+            className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         </Link>
@@ -77,13 +77,13 @@ export function StreamCard({ stream, hasClips }: StreamCardProps) {
       {/* Content */}
       <div className="p-3 space-y-2">
         {/* Title */}
-        <h3 className="line-clamp-2 text-sm font-semibold leading-tight">
+        <h3 className="line-clamp-2 text-sm md:text-base font-semibold leading-tight">
           {stream.title || '無標題'}
         </h3>
 
         {/* Member Info */}
         <div className="flex items-center space-x-2">
-          <Avatar className="h-6 w-6">
+          <Avatar className="h-6 w-6 transition-transform duration-200 group-hover:scale-110 active:scale-95">
             <AvatarImage src={memberAvatar || undefined} />
             <AvatarFallback className="text-xs">
               {memberName.slice(0, 2)}

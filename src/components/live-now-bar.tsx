@@ -124,26 +124,25 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
   return (
     <>
       <div className={`relative z-50 mb-6 rounded-xl border ${containerBorderColor} bg-white dark:bg-gray-900/80 backdrop-blur-md shadow-lg`}>
-        <div className="flex flex-nowrap items-start gap-4 overflow-x-auto scroll-smooth p-4 pb-3 custom-scrollbar">
-          {/* 左側標題 */}
-          <div className="flex-shrink-0 flex items-center gap-2 px-2 md:px-3 pt-2">
+        <div
+          className="flex flex-nowrap items-start gap-3 md:gap-4 overflow-x-auto scroll-smooth snap-x snap-proximity p-4 pb-3 touch-pan-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+        >
+          {/* 左側標題（與各頭像同列捲動，利於 snap） */}
+          <div className="flex-shrink-0 snap-start flex items-center gap-2 px-2 md:px-3 pt-2 self-start">
             <span className="text-xl md:text-2xl animate-pulse">🔴</span>
             <span className="text-base md:text-lg font-bold text-slate-900 dark:text-white whitespace-nowrap">
               LIVE NOW
             </span>
           </div>
 
-          {/* 直播項目列表（支援雙平台同時直播） */}
-          <div className="flex flex-nowrap items-start gap-3 md:gap-4">
-            {sortedItems.map((item, index) => (
-              <LiveMemberItem
-                key={`${item.member.id}-${item.platform}-${index}`}
-                item={item}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-              />
-            ))}
-          </div>
+          {sortedItems.map((item, index) => (
+            <LiveMemberItem
+              key={`${item.member.id}-${item.platform}-${index}`}
+              item={item}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+            />
+          ))}
         </div>
       </div>
 
@@ -228,7 +227,7 @@ function LiveMemberItem({
 
   return (
     <div
-      className="flex-shrink-0 flex flex-col items-center gap-2 relative"
+      className="flex-shrink-0 snap-start flex flex-col items-center gap-2 relative min-h-[44px] min-w-[44px]"
       onMouseEnter={(e) => onMouseEnter(item, e)}
       onMouseLeave={onMouseLeave}
     >
@@ -236,7 +235,7 @@ function LiveMemberItem({
         href={linkUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex flex-col items-center gap-2 cursor-pointer transition-transform hover:scale-110"
+        className="flex flex-col items-center gap-2 cursor-pointer touch-manipulation py-1 px-1 min-w-[44px]"
       >
         {/* 圓形頭像 */}
         <div className="relative">
@@ -251,7 +250,7 @@ function LiveMemberItem({
             <img
               src={member.avatar_url}
               alt={member.name_jp}
-              className={`w-14 h-14 md:w-16 md:h-16 object-cover rounded-full border-2 ${
+              className={`w-14 h-14 md:w-16 md:h-16 object-cover rounded-full border-2 transition-transform duration-200 hover:scale-110 active:scale-95 ${
                 isLive ? 'animate-pulse' : ''
               } ${isUpcoming ? 'grayscale' : ''} ${
                 isTwitchLive ? 'ring-2 ring-purple-500 border-purple-500/50' : ''
@@ -272,7 +271,7 @@ function LiveMemberItem({
             />
           ) : (
             <div
-              className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center border-2 text-xl md:text-2xl ${
+              className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center border-2 text-xl md:text-2xl transition-transform duration-200 hover:scale-110 active:scale-95 ${
                 isUpcoming ? 'grayscale' : ''
               } ${isTwitchLive ? 'ring-2 ring-purple-500 border-purple-500/50' : ''}`}
               style={{

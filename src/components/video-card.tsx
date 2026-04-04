@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
@@ -34,13 +33,13 @@ export function VideoCard({ clip }: VideoCardProps) {
 
   return (
     <Link href={`https://www.youtube.com/watch?v=${clip.video_id}`} target="_blank" rel="noopener noreferrer">
-      <Card className="group overflow-hidden transition-transform hover:scale-105 cursor-pointer">
+      <Card className="group cursor-pointer gap-0 overflow-hidden p-0 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-indigo-500/10">
         {/* Thumbnail */}
-        <div className="relative aspect-video w-full overflow-hidden bg-muted">
+        <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
           <img
             src={clip.thumbnail_url || 'https://placehold.co/640x400/1a1a1a/ffffff?text=No+Image'}
             alt={clip.title}
-            className="w-full h-full object-cover transition-transform group-hover:scale-110"
+            className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             onError={(e) => {
               // 處理圖片載入失敗（例如 Twitch 403 錯誤）
               const target = e.target as HTMLImageElement
@@ -60,13 +59,13 @@ export function VideoCard({ clip }: VideoCardProps) {
         {/* Content */}
         <div className="p-3 space-y-2">
           {/* Title */}
-          <h3 className="line-clamp-2 text-sm font-semibold leading-tight">
+          <h3 className="line-clamp-2 text-sm md:text-base font-semibold leading-tight">
             {clip.title}
           </h3>
 
           {/* Channel Info */}
           <div className="flex items-center space-x-2">
-            <Avatar className="h-6 w-6">
+            <Avatar className="h-6 w-6 transition-transform duration-200 group-hover:scale-110 active:scale-95">
               <AvatarFallback className="text-xs">
                 {channelName.slice(0, 2)}
               </AvatarFallback>

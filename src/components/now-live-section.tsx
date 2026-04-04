@@ -101,9 +101,9 @@ export function NowLiveSection() {
 
       {/* 卡片列表：小螢幕走橫向滑動，大螢幕以 Grid 顯示無限量 */}
       <div className="block md:hidden">
-        <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">
+        <div className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-proximity pb-4 touch-pan-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {liveVideos.map((video) => (
-            <div key={video.id} className="snap-start">
+            <div key={video.id} className="snap-start shrink-0">
               <NowLiveCard video={video} />
             </div>
           ))}
@@ -141,13 +141,13 @@ function NowLiveCard({ video }: NowLiveCardProps) {
       rel="noopener noreferrer"
       className="block min-w-[260px] max-w-[320px] md:min-w-0 h-full group"
     >
-      <Card className="h-full overflow-hidden bg-white dark:bg-gray-900/50 border border-slate-200 dark:border-gray-800 hover:border-red-500/70 hover:shadow-lg hover:shadow-red-500/10 transition-all duration-300">
-        <div className="relative aspect-video w-full overflow-hidden bg-slate-900">
+      <Card className="h-full gap-0 overflow-hidden bg-white dark:bg-gray-900/50 border border-slate-200 dark:border-gray-800 p-0 transition-all duration-300 hover:-translate-y-1 hover:border-red-500/70 hover:shadow-lg hover:shadow-red-500/10 dark:hover:shadow-indigo-500/10">
+        <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-slate-900">
           {video.thumbnail_url ? (
             <img
               src={video.thumbnail_url}
               alt={video.title}
-              className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+              className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-slate-800 text-3xl opacity-50">
@@ -170,7 +170,7 @@ function NowLiveCard({ video }: NowLiveCardProps) {
         </div>
 
         <div className="space-y-1.5 p-3">
-          <p className="line-clamp-2 text-sm font-bold text-slate-900 dark:text-gray-100 leading-snug group-hover:text-red-500 transition-colors">
+          <p className="line-clamp-2 text-sm md:text-base font-bold text-slate-900 dark:text-gray-100 leading-snug group-hover:text-red-500 transition-colors">
             {video.title}
           </p>
           <div className="flex items-center justify-between mt-1">

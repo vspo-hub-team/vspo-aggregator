@@ -366,7 +366,7 @@ export default function ClippersPage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-gray-950 p-6 md:p-8">
+      <main className="min-h-screen bg-gray-950 px-4 py-6 md:px-8 md:py-8">
         <div className="max-w-7xl mx-auto space-y-8">
           {/* 返回按鈕與推薦按鈕 */}
           <div className="flex items-center justify-between">
@@ -419,7 +419,7 @@ export default function ClippersPage() {
 
   if (isError) {
     return (
-      <main className="min-h-screen bg-gray-950 p-6 md:p-8">
+      <main className="min-h-screen bg-gray-950 px-4 py-6 md:px-8 md:py-8">
         <div className="max-w-7xl mx-auto space-y-8">
           {/* 返回按鈕與推薦按鈕 */}
           <div className="flex items-center justify-between">
@@ -461,7 +461,7 @@ export default function ClippersPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 p-6 md:p-8">
+    <main className="min-h-screen bg-gray-950 px-4 py-6 md:px-8 md:py-8">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* 返回按鈕與推薦按鈕 */}
         <div className="flex items-center justify-between">

@@ -153,13 +153,13 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
       rel="noopener noreferrer"
       className="block"
     >
-      <Card className="group overflow-hidden transition-transform hover:scale-105 cursor-pointer">
+      <Card className="group cursor-pointer gap-0 overflow-hidden p-0 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-indigo-500/10">
         {/* Thumbnail */}
-        <div className="relative aspect-video w-full overflow-hidden bg-muted">
+        <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
           <img
             src={video.thumbnail_url || 'https://placehold.co/640x400/1a1a1a/ffffff?text=No+Image'}
             alt={video.title}
-            className="w-full h-full object-cover transition-transform group-hover:scale-110"
+            className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             onError={(e) => {
               // 處理圖片載入失敗（例如 Twitch 403 錯誤）
               const target = e.target as HTMLImageElement
@@ -186,7 +186,7 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
         {/* Content */}
         <div className="p-3 space-y-2">
           {/* Title */}
-          <h3 className="line-clamp-2 text-sm font-semibold leading-tight text-foreground">
+          <h3 className="line-clamp-2 text-sm md:text-base font-semibold leading-tight text-foreground">
             {video.title}
           </h3>
 
@@ -243,7 +243,7 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
                     className="flex items-center space-x-2 flex-1 min-w-0 hover:opacity-80 transition-opacity cursor-pointer group/avatar"
                   >
                     <div className="relative">
-                      <Avatar className="h-6 w-6">
+                      <Avatar className="h-6 w-6 transition-transform duration-200 group-hover:scale-110 active:scale-95">
                         {displayAvatar ? (
                           <AvatarImage src={displayAvatar} alt={displayName} />
                         ) : (
@@ -263,7 +263,7 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
                   </div>
                 ) : (
                   <div className="flex items-center space-x-2 flex-1 min-w-0">
-                    <Avatar className="h-6 w-6">
+                    <Avatar className="h-6 w-6 transition-transform duration-200 group-hover:scale-110 active:scale-95">
                       {displayAvatar ? (
                         <AvatarImage src={displayAvatar} alt={displayName} />
                       ) : (
@@ -284,7 +284,7 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
               <Button
                 variant="ghost"
                 size="icon"
-                className={`h-7 w-7 flex-shrink-0 transition-all ${
+                className={`h-11 w-11 min-h-[44px] min-w-[44px] md:h-9 md:w-9 md:min-h-0 md:min-w-0 flex-shrink-0 touch-manipulation transition-all duration-200 hover:scale-110 active:scale-95 ${
                   hasClips
                     ? 'text-purple-500 hover:text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.5)] hover:drop-shadow-[0_0_8px_rgba(168,85,247,0.7)]'
                     : 'text-muted-foreground hover:text-primary opacity-50'
