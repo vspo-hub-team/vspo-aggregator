@@ -20,6 +20,8 @@ export const metadata: Metadata = {
   description: "VTuber 精華影片與直播聚合平台",
 };
 
+export const runtime = "edge";
+
 // 強制每 60 秒重新驗證，確保使用者看到最新資料
 export const revalidate = 60;
 
