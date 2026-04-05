@@ -9,9 +9,6 @@ jobs:
   update-stats:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      NPM_CONFIG_LEGACY_PEER_DEPS: true
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -23,6 +20,8 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
+        env:
+          NPM_CONFIG_LEGACY_PEER_DEPS: true
         run: npm ci --legacy-peer-deps
 
       - name: Run Update Stats
@@ -31,5 +30,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
         run: npx tsx scripts/update-stats.ts
