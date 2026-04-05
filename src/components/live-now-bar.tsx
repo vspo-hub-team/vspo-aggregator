@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import { format } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
@@ -29,6 +29,13 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
   // State: 紀錄目前滑鼠移到了哪個直播項目
   const [hoveredItem, setHoveredItem] = useState<LiveItem | null>(null)
   const [tooltipPos, setTooltipPos] = useState<TooltipPosition>({ x: 0, y: 0 })
+  const scrollRef = useRef<HTMLDivElement>(null)
+  /** 避免 Date.now() / 本地時區 format 造成 SSR 與初次 CSR DOM 不一致 */
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // 構建直播項目列表（支援雙平台同時直播）
   // 如果成員在兩個平台都在直播，會產生兩個項目
@@ -84,6 +91,21 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
     return 0
   })
 
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault()
+        el.scrollLeft += e.deltaY
+      }
+    }
+
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [sortedItems.length])
+
   // 空狀態處理：如果沒有任何直播項目，顯示提示訊息
   if (sortedItems.length === 0) {
     return (
@@ -125,12 +147,13 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
 
   return (
     <>
-      <div className={`relative z-50 mb-6 rounded-xl border ${containerBorderColor} bg-white dark:bg-gray-900/80 backdrop-blur-md shadow-lg`}>
+      <div className={`relative z-50 mb-6 min-w-0 rounded-xl border ${containerBorderColor} bg-white dark:bg-gray-900/80 backdrop-blur-md shadow-lg`}>
         <div
-          className="flex flex-nowrap items-start gap-3 md:gap-4 overflow-x-auto scroll-smooth snap-x snap-proximity p-4 pb-3 touch-pan-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          ref={scrollRef}
+          className="flex w-full min-w-0 flex-nowrap items-start gap-3 md:gap-4 overflow-x-auto snap-x snap-proximity p-4 pb-3 touch-pan-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
         >
           {/* 左側標題（與各頭像同列捲動，利於 snap） */}
-          <div className="flex-shrink-0 snap-start flex items-center gap-2 px-2 md:px-3 pt-2 self-start">
+          <div className="shrink-0 snap-start flex items-center gap-2 px-2 md:px-3 pt-2 self-start">
             <span className="text-xl md:text-2xl animate-pulse">🔴</span>
             <span className="text-base md:text-lg font-bold text-slate-900 dark:text-white whitespace-nowrap">
               LIVE NOW
@@ -142,6 +165,7 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
               key={`${item.member.id}-${item.platform}-${index}`}
               item={item}
               index={index}
+              mounted={mounted}
               onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}
             />
@@ -164,6 +188,7 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
 interface LiveMemberItemProps {
   item: LiveItem
   index: number
+  mounted: boolean
   onMouseEnter: (item: LiveItem, event: React.MouseEvent<HTMLDivElement>) => void
   onMouseLeave: () => void
 }
@@ -171,6 +196,7 @@ interface LiveMemberItemProps {
 function LiveMemberItem({
   item,
   index,
+  mounted,
   onMouseEnter,
   onMouseLeave,
 }: LiveMemberItemProps) {
@@ -213,9 +239,11 @@ function LiveMemberItem({
       ? '#ff2d2d' // YouTube 紅色
       : '#9ca3af' // 待機室灰色
 
-  // 判斷是否為「準備中」狀態：upcoming 且時間已過預定開台時間
-  const isPreparing = isUpcoming && 
-    liveStartTime && 
+  // 僅在客戶端掛載後才用「現在」判斷，避免 SSR / hydration 與 CSR 時間不一致
+  const isPreparing =
+    mounted &&
+    isUpcoming &&
+    !!liveStartTime &&
     new Date(liveStartTime).getTime() <= Date.now()
 
   // 格式化開始時間 (HH:mm)
@@ -236,7 +264,7 @@ function LiveMemberItem({
 
   return (
     <div
-      className="flex-shrink-0 snap-start flex flex-col items-center gap-2 relative min-h-[44px] min-w-[44px]"
+      className="shrink-0 snap-start flex flex-col items-center gap-2 relative min-h-[44px] min-w-[44px]"
       onMouseEnter={(e) => onMouseEnter(item, e)}
       onMouseLeave={onMouseLeave}
     >
@@ -307,8 +335,8 @@ function LiveMemberItem({
         {/* 名字或時間 */}
         <div className="text-center min-w-[60px]">
           {isUpcoming && startTime ? (
-            <p className="text-[10px] md:text-xs font-semibold text-slate-600 dark:text-gray-300 whitespace-nowrap">
-              {startTime}
+            <p className="text-[10px] md:text-xs font-semibold text-slate-600 dark:text-gray-300 whitespace-nowrap tabular-nums min-h-[1em]">
+              {mounted ? startTime : '\u00a0'}
             </p>
           ) : (
             <p className="text-[10px] md:text-xs font-semibold text-slate-900 dark:text-white whitespace-nowrap truncate">

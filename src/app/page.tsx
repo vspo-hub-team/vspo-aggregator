@@ -124,7 +124,7 @@ function HomeContent() {
     <main className="min-h-screen bg-slate-50 dark:bg-gray-950 px-4 py-6 md:px-8 md:py-8">
       <div className="max-w-7xl mx-auto">
         {/* 正在直播快速列（成員頭像條） */}
-        {members && <LiveNowBar members={members} />}
+        <LiveNowBar members={members ?? []} />
 
         {/* 現正直播中 (Now Live) 影片區塊 */}
         <NowLiveSection />

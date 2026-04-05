@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { Video, Member, Clipper } from '@/types/database'
@@ -376,6 +376,23 @@ export function LatestVideoGrid({
     },
   })
 
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault()
+        el.scrollLeft += e.deltaY
+      }
+    }
+
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [memberId, isLoading, isError])
+
   // 當篩選條件改變時，重置分頁和影片列表
   // 關鍵防呆機制：任何過濾條件改變時都必須重置分頁
   useEffect(() => {
@@ -563,19 +580,22 @@ export function LatestVideoGrid({
 
       {/* UI 區域二：成員篩選列（如果沒有強制綁定 memberId 才顯示） */}
       {!memberId && (
-        <div className="w-full">
-            <div className="flex flex-nowrap overflow-x-auto scroll-smooth snap-x snap-proximity w-full gap-3 pb-4 touch-pan-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div className="w-full min-w-0">
+          <div
+            ref={scrollRef}
+            className="flex w-full min-w-0 flex-nowrap overflow-x-auto snap-x snap-proximity gap-3 pb-4 touch-pan-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          >
           <button
             type="button"
             onClick={() => setSelectedMember(null)}
-            className={`flex-shrink-0 snap-start flex flex-col items-center gap-2 transition-all touch-manipulation min-h-[44px] min-w-[44px] justify-center ${
+            className={`shrink-0 snap-start flex flex-col items-center gap-2 transition-all touch-manipulation min-h-[44px] min-w-[44px] justify-center ${
               selectedMember === null
                 ? 'opacity-100 scale-105'
                 : 'opacity-60 hover:opacity-80'
             }`}
           >
             <div
-              className={`w-11 h-11 min-w-[44px] min-h-[44px] md:w-14 md:h-14 md:min-w-0 md:min-h-0 rounded-full flex items-center justify-center border-2 text-xl md:text-2xl transition-transform duration-200 hover:scale-110 active:scale-95 ${
+              className={`size-11 min-h-[44px] min-w-[44px] shrink-0 md:size-14 md:min-h-[56px] md:min-w-[56px] rounded-full flex items-center justify-center border-2 text-xl md:text-2xl transition-transform duration-200 hover:scale-110 active:scale-95 ${
                 selectedMember === null
                   ? 'border-[var(--theme-color)] bg-slate-200 dark:bg-white/20'
                   : 'border-slate-300 dark:border-gray-600 bg-slate-100 dark:bg-gray-800/50'
@@ -591,14 +611,14 @@ export function LatestVideoGrid({
               type="button"
               key={member.id}
               onClick={() => setSelectedMember(member.id)}
-              className={`flex-shrink-0 snap-start flex flex-col items-center gap-2 transition-all touch-manipulation min-h-[44px] min-w-[44px] justify-center ${
+              className={`shrink-0 snap-start flex flex-col items-center gap-2 transition-all touch-manipulation min-h-[44px] min-w-[44px] justify-center ${
                 selectedMember === member.id
                   ? 'opacity-100 scale-105'
                   : 'opacity-60 hover:opacity-80'
               }`}
             >
               <div
-                className={`w-11 h-11 min-w-[44px] min-h-[44px] md:w-14 md:h-14 md:min-w-0 md:min-h-0 rounded-full overflow-hidden border-2 transition-transform duration-200 hover:scale-110 active:scale-95 ${
+                className={`size-11 min-h-[44px] min-w-[44px] shrink-0 md:size-14 md:min-h-[56px] md:min-w-[56px] rounded-full overflow-hidden border-2 transition-transform duration-200 hover:scale-110 active:scale-95 ${
                   selectedMember === member.id
                     ? 'border-[var(--theme-color)] ring-2 ring-[color-mix(in_oklab,var(--theme-color)_70%,white_30%)]'
                     : 'border-slate-300 dark:border-gray-600'
