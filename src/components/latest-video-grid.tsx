@@ -16,6 +16,7 @@ import { VideoSkeleton } from '@/components/video-skeleton'
 import { VSPO_THEME_COLORS, DEFAULT_THEME_COLOR } from '@/lib/vspo-theme-colors'
 import { EN_MEMBERS } from '@/config/members'
 import Link from 'next/link'
+import { getOptimizedImageUrl } from '@/lib/utils'
 
 type MainTab = 'archives' | 'jp_clips' | 'cn_clips'
 type PlatformFilter = 'all' | 'youtube' | 'twitch'
@@ -63,9 +64,16 @@ interface LatestVideoGridProps {
   memberId?: string // 可選：強制綁定特定成員
   channelIds?: string[] // 可選：使用頻道 ID 列表查詢（用於個人頁面）
   memberNames?: { name_jp: string; name_zh: string } // 可選：成員名稱（用於標題關鍵字查詢）
+  /** 首頁「最新影片」前 N 張縮圖 LCP 優先載入 */
+  thumbnailPriorityCount?: number
 }
 
-export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVideoGridProps = {}) {
+export function LatestVideoGrid({
+  memberId,
+  channelIds,
+  memberNames,
+  thumbnailPriorityCount = 0,
+}: LatestVideoGridProps = {}) {
   const [mainTab, setMainTab] = useState<MainTab>('archives')
   const [selectedMember, setSelectedMember] = useState<string | null>(memberId || null)
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
@@ -598,7 +606,7 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
               >
                 {member.avatar_url ? (
                   <img
-                    src={member.avatar_url}
+                    src={getOptimizedImageUrl(member.avatar_url, 128)}
                     alt={member.name_jp || member.name_zh || '成員'}
                     className="h-full w-full object-cover"
                   />
@@ -790,8 +798,12 @@ export function LatestVideoGrid({ memberId, channelIds, memberNames }: LatestVid
             </div>
           )}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredVideos.map((video) => (
-              <LatestVideoCard key={video.id} video={video} />
+            {filteredVideos.map((video, index) => (
+              <LatestVideoCard
+                key={video.id}
+                video={video}
+                priorityThumbnail={index < thumbnailPriorityCount}
+              />
             ))}
           </div>
 

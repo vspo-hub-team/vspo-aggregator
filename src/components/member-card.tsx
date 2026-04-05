@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Member } from '@/types/database'
 import { TWITCH_CHANNEL_MAPPING } from '@/config/members'
+import { FALLBACK_VIDEO_THUMBNAIL, getOptimizedImageUrl } from '@/lib/utils'
 
 interface MemberCardProps {
   member: Member
@@ -10,11 +11,13 @@ interface MemberCardProps {
 
 export function MemberCard({ member }: MemberCardProps) {
   const [imageError, setImageError] = useState(false)
-  const [imgSrc, setImgSrc] = useState<string>(member.avatar_url || '')
+  const [imgSrc, setImgSrc] = useState<string>(() =>
+    member.avatar_url ? getOptimizedImageUrl(member.avatar_url, 128) : ''
+  )
 
   // 當 member 資料改變時，重置圖片狀態
   useEffect(() => {
-    setImgSrc(member.avatar_url || '')
+    setImgSrc(member.avatar_url ? getOptimizedImageUrl(member.avatar_url, 128) : '')
     setImageError(false)
   }, [member.avatar_url])
 
@@ -148,13 +151,12 @@ export function MemberCard({ member }: MemberCardProps) {
             {member.live_thumbnail && (
               <div className="w-full max-w-[200px] mb-3 rounded-lg overflow-hidden">
                 <img
-                  src={member.live_thumbnail}
+                  src={getOptimizedImageUrl(member.live_thumbnail, 480)}
                   alt={member.live_title || 'Live thumbnail'}
                   className="w-full h-auto object-cover"
                   onError={(e) => {
-                    // 處理圖片載入失敗（例如 Twitch 403 錯誤）
                     const target = e.target as HTMLImageElement
-                    target.src = 'https://placehold.co/640x400/1a1a1a/ffffff?text=No+Image'
+                    target.src = FALLBACK_VIDEO_THUMBNAIL
                   }}
                 />
               </div>

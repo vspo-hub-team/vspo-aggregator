@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useMembers } from '@/hooks/use-members'
 import { getNearestUpcomingBirthdayWithinWeek } from '@/lib/birthday-utils'
+import { getOptimizedImageUrl } from '@/lib/utils'
 
 export function Navbar() {
   const { data: members = [] } = useMembers()
@@ -24,7 +25,7 @@ export function Navbar() {
                   member.avatar_url ? (
                     <img
                       key={member.id}
-                      src={member.avatar_url}
+                      src={getOptimizedImageUrl(member.avatar_url, 128)}
                       alt={member.name_jp || member.name_zh}
                       className="w-6 h-6 rounded-full border border-white/70 dark:border-slate-900/70 object-cover"
                     />
@@ -74,6 +75,7 @@ export function Navbar() {
         </Link>
         <Link
           href="/leaderboard"
+          prefetch={false}
           className="px-4 py-1.5 rounded-full bg-slate-800 text-slate-100 border border-yellow-400/70 hover:bg-slate-700 hover:border-yellow-300 transition-colors flex items-center gap-2"
         >
           <span>🏆 排行榜</span>

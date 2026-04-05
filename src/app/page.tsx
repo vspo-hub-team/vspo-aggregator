@@ -164,7 +164,7 @@ function HomeContent() {
         </h1>
 
         {/* 最新影片牆 */}
-        <LatestVideoGrid />
+        <LatestVideoGrid thumbnailPriorityCount={4} />
       </div>
 
       {/* URL 參數觸發的同場精華對話框 */}

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
 import { Card } from '@/components/ui/card'
+import { FALLBACK_VIDEO_THUMBNAIL, getOptimizedImageUrl } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Clip } from '@/types/database'
@@ -37,13 +38,12 @@ export function VideoCard({ clip }: VideoCardProps) {
         {/* Thumbnail */}
         <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
           <img
-            src={clip.thumbnail_url || 'https://placehold.co/640x400/1a1a1a/ffffff?text=No+Image'}
+            src={getOptimizedImageUrl(clip.thumbnail_url || FALLBACK_VIDEO_THUMBNAIL, 640)}
             alt={clip.title}
             className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             onError={(e) => {
-              // 處理圖片載入失敗（例如 Twitch 403 錯誤）
               const target = e.target as HTMLImageElement
-              target.src = 'https://placehold.co/640x400/1a1a1a/ffffff?text=No+Image'
+              target.src = FALLBACK_VIDEO_THUMBNAIL
             }}
           />
           {/* Duration Badge */}

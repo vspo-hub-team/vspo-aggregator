@@ -20,6 +20,7 @@ import { ArrowLeft, Eye, ExternalLink, Sparkles } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
+import { getOptimizedImageUrl } from '@/lib/utils'
 
 // 擴展 Clipper 類型，包含最新影片
 interface ClipperWithLatestVideo extends Clipper {
@@ -81,7 +82,7 @@ function ClipperVideoCard({ clipper }: { clipper: ClipperWithLatestVideo }) {
         {latestVideo?.thumbnail_url ? (
           <>
             <img
-              src={latestVideo.thumbnail_url}
+              src={getOptimizedImageUrl(latestVideo.thumbnail_url, 640)}
               alt={latestVideo.title || '影片縮圖'}
               className="w-full h-full object-cover"
               onError={(e) => {
@@ -95,7 +96,13 @@ function ClipperVideoCard({ clipper }: { clipper: ClipperWithLatestVideo }) {
                 className="flex items-center gap-2 hover:opacity-80 transition-opacity"
               >
                 <Avatar className="h-6 w-6 border border-gray-600">
-                  <AvatarImage src={clipper.avatar_url || undefined} />
+                  <AvatarImage
+                    src={
+                      clipper.avatar_url
+                        ? getOptimizedImageUrl(clipper.avatar_url, 128)
+                        : undefined
+                    }
+                  />
                   <AvatarFallback className="bg-gray-700 text-gray-300 text-xs">
                     {clipper.name?.[0] || '?'}
                   </AvatarFallback>
@@ -127,7 +134,13 @@ function ClipperVideoCard({ clipper }: { clipper: ClipperWithLatestVideo }) {
                 className="flex items-center gap-2 hover:opacity-80 transition-opacity"
               >
                 <Avatar className="h-6 w-6 border border-gray-600">
-                  <AvatarImage src={clipper.avatar_url || undefined} />
+                  <AvatarImage
+                    src={
+                      clipper.avatar_url
+                        ? getOptimizedImageUrl(clipper.avatar_url, 128)
+                        : undefined
+                    }
+                  />
                   <AvatarFallback className="bg-gray-700 text-gray-300 text-xs">
                     {clipper.name?.[0] || '?'}
                   </AvatarFallback>

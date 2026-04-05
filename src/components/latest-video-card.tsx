@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
@@ -12,13 +13,20 @@ import { Button } from '@/components/ui/button'
 import { Video } from '@/types/database'
 import { RelatedVideoDialog } from '@/components/related-video-dialog'
 import { useVideoClipsCount } from '@/hooks/use-videos'
+import { FALLBACK_VIDEO_THUMBNAIL, getOptimizedImageUrl } from '@/lib/utils'
 
 interface LatestVideoCardProps {
   video: Video
   hideRelatedButton?: boolean
+  /** 首頁等 LCP 候選縮圖：僅前幾張設為 true */
+  priorityThumbnail?: boolean
 }
 
-export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVideoCardProps) {
+export function LatestVideoCard({
+  video,
+  hideRelatedButton = false,
+  priorityThumbnail = false,
+}: LatestVideoCardProps) {
   const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
   // 優先顯示 clipper（如果是烤肉影片），否則顯示官方成員
@@ -39,6 +47,18 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
     ? clipper.avatar_url 
     : (member?.avatar_url || null)
   const hasDisplayInfo = clipper !== null || member !== null
+
+  const [thumbSrc, setThumbSrc] = useState(() =>
+    getOptimizedImageUrl(video.thumbnail_url || FALLBACK_VIDEO_THUMBNAIL, 640)
+  )
+
+  useEffect(() => {
+    setThumbSrc(getOptimizedImageUrl(video.thumbnail_url || FALLBACK_VIDEO_THUMBNAIL, 640))
+  }, [video.id, video.thumbnail_url])
+
+  const optimizedAvatarSrc = displayAvatar
+    ? getOptimizedImageUrl(displayAvatar, 128)
+    : undefined
 
   // 格式化時間：顯示精確時間 (MM/DD HH:mm)
   const formatPublishedTime = (dateString: string | null | undefined): string => {
@@ -156,14 +176,18 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
       <Card className="group cursor-pointer gap-0 overflow-hidden p-0 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-indigo-500/10">
         {/* Thumbnail */}
         <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
-          <img
-            src={video.thumbnail_url || 'https://placehold.co/640x400/1a1a1a/ffffff?text=No+Image'}
+          <Image
+            src={thumbSrc}
             alt={video.title}
-            className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-            onError={(e) => {
-              // 處理圖片載入失敗（例如 Twitch 403 錯誤）
-              const target = e.target as HTMLImageElement
-              target.src = 'https://placehold.co/640x400/1a1a1a/ffffff?text=No+Image'
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+            className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+            priority={priorityThumbnail}
+            onError={() => {
+              const raw = video.thumbnail_url || FALLBACK_VIDEO_THUMBNAIL
+              setThumbSrc((prev) =>
+                prev.includes("wsrv.nl") ? raw : FALLBACK_VIDEO_THUMBNAIL
+              )
             }}
           />
           {/* 影片類型標籤 */}
@@ -245,7 +269,10 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
                     <div className="relative">
                       <Avatar className="h-6 w-6 transition-transform duration-200 group-hover:scale-110 active:scale-95">
                         {displayAvatar ? (
-                          <AvatarImage src={displayAvatar} alt={displayName} />
+                          <AvatarImage
+                            src={optimizedAvatarSrc || undefined}
+                            alt={displayName}
+                          />
                         ) : (
                           <AvatarFallback className="text-xs">
                             {displayName.slice(0, 2)}
@@ -265,7 +292,10 @@ export function LatestVideoCard({ video, hideRelatedButton = false }: LatestVide
                   <div className="flex items-center space-x-2 flex-1 min-w-0">
                     <Avatar className="h-6 w-6 transition-transform duration-200 group-hover:scale-110 active:scale-95">
                       {displayAvatar ? (
-                        <AvatarImage src={displayAvatar} alt={displayName} />
+                        <AvatarImage
+                          src={optimizedAvatarSrc || undefined}
+                          alt={displayName}
+                        />
                       ) : (
                         <AvatarFallback className="text-xs">
                           {displayName.slice(0, 2)}

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { StreamWithMember } from '@/types/database'
 import { useVideoClipsCount } from '@/hooks/use-videos'
+import { getOptimizedImageUrl } from '@/lib/utils'
 
 interface StreamCardProps {
   stream: StreamWithMember
@@ -25,7 +26,10 @@ export function StreamCard({ stream, hasClips }: StreamCardProps) {
       })
     : '未知時間'
 
-  const thumbnailUrl = `https://img.youtube.com/vi/${stream.video_id}/maxresdefault.jpg`
+  const thumbnailUrl = getOptimizedImageUrl(
+    `https://img.youtube.com/vi/${stream.video_id}/maxresdefault.jpg`,
+    640
+  )
 
   // 查詢該影片是否有關聯的剪輯（使用 video_id 作為查詢條件）
   const { data: clipsCount = 0 } = useVideoClipsCount(stream.video_id, 'archive')
@@ -84,7 +88,9 @@ export function StreamCard({ stream, hasClips }: StreamCardProps) {
         {/* Member Info */}
         <div className="flex items-center space-x-2">
           <Avatar className="h-6 w-6 transition-transform duration-200 group-hover:scale-110 active:scale-95">
-            <AvatarImage src={memberAvatar || undefined} />
+            <AvatarImage
+              src={memberAvatar ? getOptimizedImageUrl(memberAvatar, 128) : undefined}
+            />
             <AvatarFallback className="text-xs">
               {memberName.slice(0, 2)}
             </AvatarFallback>

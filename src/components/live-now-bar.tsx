@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { format } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
 import { Member } from '@/types/database'
 import { TWITCH_CHANNEL_MAPPING } from '@/config/members'
+import { FALLBACK_VIDEO_THUMBNAIL, getOptimizedImageUrl } from '@/lib/utils'
 
 interface LiveNowBarProps {
   members: Member[]
@@ -139,6 +141,7 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
             <LiveMemberItem
               key={`${item.member.id}-${item.platform}-${index}`}
               item={item}
+              index={index}
               onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}
             />
@@ -160,12 +163,14 @@ export function LiveNowBar({ members }: LiveNowBarProps) {
 
 interface LiveMemberItemProps {
   item: LiveItem
+  index: number
   onMouseEnter: (item: LiveItem, event: React.MouseEvent<HTMLDivElement>) => void
   onMouseLeave: () => void
 }
 
 function LiveMemberItem({
   item,
+  index,
   onMouseEnter,
   onMouseLeave,
 }: LiveMemberItemProps) {
@@ -224,6 +229,10 @@ function LiveMemberItem({
   }
 
   const startTime = formatStartTime()
+  const priorityAvatar = index < 6
+  const avatarOptimized = member.avatar_url
+    ? getOptimizedImageUrl(member.avatar_url, 128)
+    : ''
 
   return (
     <div
@@ -246,10 +255,14 @@ function LiveMemberItem({
           )}
           
           {/* 優先使用 member.avatar_url，如果為空或載入失敗才顯示電視機佔位符 */}
-          {member.avatar_url && !imageError ? (
-            <img
-              src={member.avatar_url}
+          {member.avatar_url && !imageError && avatarOptimized ? (
+            <Image
+              src={avatarOptimized}
               alt={member.name_jp}
+              width={64}
+              height={64}
+              sizes="(max-width: 768px) 56px, 64px"
+              priority={priorityAvatar}
               className={`w-14 h-14 md:w-16 md:h-16 object-cover rounded-full border-2 transition-transform duration-200 hover:scale-110 active:scale-95 ${
                 isLive ? 'animate-pulse' : ''
               } ${isUpcoming ? 'grayscale' : ''} ${
@@ -367,13 +380,12 @@ function Tooltip({ item, position, onMouseLeave }: TooltipProps) {
       {liveThumbnail && (
         <div className="relative w-full aspect-video overflow-hidden">
           <img
-            src={liveThumbnail}
+            src={getOptimizedImageUrl(liveThumbnail, 480)}
             alt={liveTitle || 'Live thumbnail'}
             className={`w-full h-full object-cover ${isUpcoming ? 'grayscale' : ''}`}
             onError={(e) => {
-              // 處理圖片載入失敗（例如 Twitch 403 錯誤）
               const target = e.target as HTMLImageElement
-              target.src = 'https://placehold.co/640x400/1a1a1a/ffffff?text=No+Image'
+              target.src = FALLBACK_VIDEO_THUMBNAIL
             }}
           />
         </div>

@@ -1,9 +1,12 @@
 'use client'
 
+import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Video } from '@/types/database'
 import { Card } from '@/components/ui/card'
+import { FALLBACK_VIDEO_THUMBNAIL, getOptimizedImageUrl } from '@/lib/utils'
 
 export function NowLiveSection() {
   const {
@@ -124,6 +127,18 @@ interface NowLiveCardProps {
 }
 
 function NowLiveCard({ video }: NowLiveCardProps) {
+  const [thumbSrc, setThumbSrc] = useState(() =>
+    video.thumbnail_url
+      ? getOptimizedImageUrl(video.thumbnail_url, 640)
+      : FALLBACK_VIDEO_THUMBNAIL
+  )
+
+  useEffect(() => {
+    if (video.thumbnail_url) {
+      setThumbSrc(getOptimizedImageUrl(video.thumbnail_url, 640))
+    }
+  }, [video.id, video.thumbnail_url])
+
   const memberName =
     video.members?.name_jp || video.members?.name_zh || video.clipper?.name || 'VSPO 官方 / 成員'
 
@@ -144,10 +159,18 @@ function NowLiveCard({ video }: NowLiveCardProps) {
       <Card className="h-full gap-0 overflow-hidden bg-white dark:bg-gray-900/50 border border-slate-200 dark:border-gray-800 p-0 transition-all duration-300 hover:-translate-y-1 hover:border-red-500/70 hover:shadow-lg hover:shadow-red-500/10 dark:hover:shadow-indigo-500/10">
         <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-slate-900">
           {video.thumbnail_url ? (
-            <img
-              src={video.thumbnail_url}
+            <Image
+              src={thumbSrc}
               alt={video.title}
-              className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+              fill
+              sizes="(max-width: 768px) 280px, (max-width: 1200px) 50vw, 25vw"
+              className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+              onError={() => {
+                const raw = video.thumbnail_url || FALLBACK_VIDEO_THUMBNAIL
+                setThumbSrc((prev) =>
+                  prev.includes('wsrv.nl') ? raw : FALLBACK_VIDEO_THUMBNAIL
+                )
+              }}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-slate-800 text-3xl opacity-50">

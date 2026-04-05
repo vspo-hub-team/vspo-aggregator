@@ -289,23 +289,12 @@ async function updateLiveStatus() {
 }
 
 export async function GET(request: NextRequest) {
+  const secret = request.nextUrl.searchParams.get('secret')
+  if (secret !== process.env.CRON_SECRET) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
   try {
-    // Check for authorization (optional: add a secret token for security)
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-
-    // In production, you might want to verify the request is from Vercel Cron
-    // For now, we'll allow manual testing
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      // Allow if no secret is set (for development)
-      if (cronSecret) {
-        return NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        )
-      }
-    }
-
     // Update clips
     const clipsResult = await updateClips()
 

@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { formatDistanceToNow } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
 import { Users, PlayCircle, Video, Eye } from 'lucide-react'
+import { getOptimizedImageUrl } from '@/lib/utils'
 
 // 數字格式化 (例如: 12000 -> 1.2萬)
 function formatNumber(num: number | null | undefined): string {
@@ -121,7 +122,13 @@ export function ClipperListView({ lang }: { lang: 'ja' | 'zh' }) {
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             <Avatar className="h-10 w-10 border border-gray-700 flex-shrink-0">
-              <AvatarImage src={clipper.avatar_url || undefined} />
+              <AvatarImage
+                src={
+                  clipper.avatar_url
+                    ? getOptimizedImageUrl(clipper.avatar_url, 128)
+                    : undefined
+                }
+              />
               <AvatarFallback className="bg-gray-700 text-gray-300">
                 {clipper.name?.[0] || '?'}
               </AvatarFallback>
@@ -148,12 +155,16 @@ export function ClipperListView({ lang }: { lang: 'ja' | 'zh' }) {
               rel="noopener noreferrer"
               className="group relative aspect-video rounded-md overflow-hidden bg-black block"
             >
-              <img 
-                src={clipper.latestVideo.thumbnail_url || ''} 
+              <img
+                src={
+                  clipper.latestVideo.thumbnail_url
+                    ? getOptimizedImageUrl(clipper.latestVideo.thumbnail_url, 640)
+                    : '/placeholder-video.png'
+                }
                 alt={clipper.latestVideo.title || ''}
                 className="w-full h-full object-cover transition-transform group-hover:scale-105"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/placeholder-video.png';
+                  (e.target as HTMLImageElement).src = '/placeholder-video.png'
                 }}
               />
               
