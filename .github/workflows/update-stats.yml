@@ -1,4 +1,4 @@
-name: 📊 更新觀看數 (Update Stats - 每12h)
+name: Update stats (every 12h)
 
 on:
   schedule:
@@ -22,7 +22,11 @@ jobs:
       - name: Install dependencies
         env:
           NPM_CONFIG_LEGACY_PEER_DEPS: true
-        run: npm ci --legacy-peer-deps
+        run: |
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm ci --legacy-peer-deps || (echo "First npm ci failed; retry in 5s" && sleep 5 && npm ci --legacy-peer-deps)
 
       - name: Run Update Stats
         env:

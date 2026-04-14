@@ -1,4 +1,4 @@
-name: ⚡ 快速更新 (Fast Mode - 每2h)
+name: Fast scraper (every 2h)
 
 on:
   schedule:
@@ -17,11 +17,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         env:
           NPM_CONFIG_LEGACY_PEER_DEPS: true
-        run: npm ci --legacy-peer-deps
+        run: |
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm ci --legacy-peer-deps || (echo "First npm ci failed; retry in 5s" && sleep 5 && npm ci --legacy-peer-deps)
 
       - name: Run Fast Mode Update
         env:
